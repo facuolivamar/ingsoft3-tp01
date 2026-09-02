@@ -5,6 +5,13 @@ obj/
 dist/
 build/
 
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.pytest_cache/
+
 # secretos: NUNCA se versionan
 .env
 *.local

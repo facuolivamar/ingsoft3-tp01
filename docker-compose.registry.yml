@@ -1,0 +1,51 @@
+# La misma aplicacion, pero BAJANDO las imagenes del registry en vez de
+# construirlas. Es la forma en que la va a levantar cualquier entorno que no
+# tenga el codigo fuente: QA, produccion, o alguien que solo quiere probarla.
+#
+#   cp .env.example .env
+#   docker compose -f docker-compose.registry.yml up -d
+#
+# Notar que aca NO hay ninguna clave `build`: no hace falta el repositorio, solo
+# este archivo y el .env. Es la diferencia entre "compilar" y "desplegar".
+
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+    volumes:
+      - datos_db:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped
+
+  backend:
+    image: ${REGISTRY}/salas-backend:${TAG}
+    environment:
+      POSTGRES_HOST: db
+      POSTGRES_PORT: 5432
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+    ports:
+      - "${PUERTO_API:-8000}:8000"
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: unless-stopped
+
+  frontend:
+    image: ${REGISTRY}/salas-frontend:${TAG}
+    ports:
+      - "${PUERTO_WEB:-8080}:80"
+    depends_on:
+      - backend
+    restart: unless-stopped
+
+volumes:
+  datos_db:
