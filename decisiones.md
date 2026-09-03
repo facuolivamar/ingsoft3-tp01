@@ -292,3 +292,138 @@ contra la API; y los borradores de este archivo y de `evidencias.md`.
 - El diagnóstico de `libc6-dev` no se aceptó como explicación: se reprodujo el fallo y el éxito en
   contenedores sueltos, y se confirmó con `ls /usr/include/stdio.h` en los dos casos.
 - El arranque desde cero se verificó siguiendo el README, no de memoria.
+
+---
+
+## TP3 — Planificación y trazabilidad
+
+### 1. Duración del sprint: 1 semana
+
+La materia entrega un práctico por semana y la clase funciona como evento de revisión. Un sprint
+de una semana hace que el corte del sprint coincida con el momento en que hay algo que mostrar:
+el final de la iteración y la demostración caen juntos, que es para lo que sirve el corte.
+
+Con dos semanas, cada sprint cruzaría dos entregas y el límite dejaría de significar algo — sería
+una fecha en el calendario sin nada que la haga cierta. Con menos de una semana, la ceremonia
+(planificar, revisar, ajustar) pesaría más que el trabajo que se planifica.
+
+El contraargumento que reconozco: cursando otras materias, la capacidad real por semana calendario
+es baja, y una semana deja poco margen para una historia completa. Si en la práctica veo que las
+historias no entran, el ajuste correcto es partirlas más chicas antes que alargar el sprint —
+porque una historia que no entra en el sprint viola la *S* de INVEST, y ése es el problema real.
+
+### 2. Límite de trabajo en progreso: 2
+
+La regla de arranque es **cantidad de personas + 1**. Trabajando solo: 2.
+
+El "+1" es la válvula. Con límite 1, cada vez que mi única tarjeta queda esperando algo que no
+depende de mí —el pipeline corriendo, una revisión— me quedaría sin nada que hacer. Con 2 puedo
+avanzar en otra cosa mientras tanto, sin que eso se convierta en empezar todo.
+
+Con 3 o más, trabajando solo, el límite dejaría de limitar: tendría todo empezado y nada terminado,
+que es exactamente lo que la restricción viene a evitar. El trabajo empezado y sin terminar no es
+avance, es inventario, y el inventario cuesta — más cambio de contexto, ramas que envejecen, y
+conflictos más grandes al integrar.
+
+**La señal para ajustarlo**: si nunca lo alcanzo, está demasiado alto y no está limitando nada.
+Hoy el tablero muestra *In Progress 2/2*, o sea que el número efectivamente aprieta. Si lo
+alcanzara seguido pero porque todo está bloqueado por afuera, el problema no sería el límite sino
+el bloqueo, y subir el número sólo escondería el síntoma.
+
+Vale aclarar que GitHub **no lo impide**: pone el contador de la columna en rojo y deja pasar
+igual. Es un acuerdo de trabajo, no un candado de la herramienta.
+
+### 3. Diagnóstico de la historia mal escrita
+
+> `Como desarrollador quiero crear la tabla usuarios para guardar los datos.`
+
+Está mal escrita porque es una **tarea técnica con molde de historia**: el rol es quien construye
+y no quien recibe valor, el "quiero" ya elige la solución (una tabla) en vez de nombrar la
+capacidad, y el "para" repite el qué en lugar de justificar por qué vale hacerla. Rompe INVEST en
+**Valiosa** y **Testeable**: no hay comportamiento observable que se pueda demostrar, ni criterios
+de aceptación que escribirle.
+
+**Cómo la reescribiría**, subiendo de la solución técnica a la capacidad que habilita:
+
+> **Como** persona que reserva salas
+> **quiero** que mis reservas queden asociadas a mi cuenta
+> **para** poder volver a verlas y cancelarlas sin que nadie más pueda tocarlas.
+>
+> Criterios de aceptación:
+> - [ ] Me registro con correo y contraseña
+> - [ ] Al entrar veo únicamente mis reservas
+> - [ ] No puedo cancelar la reserva de otra persona
+
+Y `crear la tabla usuarios` pasa a ser una **tarea** colgada de esa historia, que es donde
+correspondía desde el principio.
+
+
+### 4. Qué problemas encontré y cómo los solucioné
+
+#### a) La jerarquía navegable necesita sub-issues, y sub-issues necesita `gh` reciente
+
+La primera idea fue armar la jerarquía con una task-list en el cuerpo de la épica (`- [ ] #7`).
+Funciona visualmente, pero es una relación **degradada**: no crea el vínculo padre-hijo, así que
+desde una tarea no se puede subir a su historia ni de ahí a la épica. El enunciado pide
+explícitamente "jerarquía navegable", y eso solo lo dan los sub-issues.
+
+Por consola el flag es `gh issue edit <padre> --add-sub-issue <hijo>`, y existe recién desde la
+versión 2.94. Verifiqué con `gh --version` (2.99.0) antes de usarlo. Con una versión anterior el
+flag no existe y hay que hacerlo desde la web.
+
+#### b) `gh` no trae permiso sobre Projects por defecto
+
+Después de `gh auth login`, cualquier comando `gh project ...` falla por permisos: el token que se
+emite no incluye el alcance de Projects. Se resuelve con `gh auth refresh -s project,read:project`,
+que reabre el navegador y agrega el permiso al token existente sin tener que volver a loguearse.
+
+#### c) El proyecto nace privado, y el enunciado lo exige público
+
+Un Project recién creado es privado. Como en este práctico el proyecto **reemplaza a
+`evidencias.md`** —quien corrige abre su URL y ve la jerarquía, el sprint y el límite en vivo—, si
+queda privado el corrector no ve nada y el TP queda sin evidencia. Se cambia en *Settings* →
+*Danger zone* → *Change visibility*, o con `gh project edit <n> --owner "@me" --visibility PUBLIC`.
+
+#### d) El campo Iteration no se puede crear por consola
+
+`gh project field-create` acepta campos de texto, número, fecha y selección simple, pero **no**
+de tipo Iteration. El campo *Sprint* hubo que crearlo desde la web (`+` al final de las columnas →
+*New field* → tipo *Iteration* → duración *1 week*). Una vez creado, asignar valores sí se puede
+por consola.
+
+#### e) El orden importa para poder ver la automatización
+
+Merguear el pull request antes de crear el proyecto habría cerrado la tarea #8 fuera del tablero:
+al importarse después, habría entrado ya cerrada, directo a *Done*, sin que se viera la
+transición. Primero el proyecto configurado, después el merge: así el `Closes #8` cierra la tarea
+y el workflow *Item closed → Done* la mueve solo, que es lo que hay que poder mostrar.
+
+
+### 5. Declaración de uso de IA
+
+Usé **Claude (Claude Code)** con acceso a la terminal, a `gh` y al repositorio.
+
+**Qué decidí yo:** la duración del sprint y su justificación; el número del límite de trabajo en
+progreso; el diagnóstico de la historia mal escrita y su reescritura;la creación de las etiquetas y de los cinco issues con sus cuerpos y criterios de
+aceptación; y qué bug cargar —uno real
+de mi app en vez del genérico del video.
+
+**Qué delegué:** el armado de la jerarquía con sub-issues; la carga de los valores de *Status*; el
+cambio de visibilidad del proyecto a público; y el pull request que cierra la tarea #8.
+
+**Qué hice yo a mano:** la creación del proyecto desde la web con *Import items from repository*,
+el campo *Sprint* de una semana, la vista de tablero, el límite de 2 en *In Progress*, la
+asignación de las iteraciones y el merge de los pull requests.
+
+**Cómo verifiqué lo que me devolvió:**
+
+- La jerarquía, contra la API de GraphQL de GitHub pidiendo los `subIssues` de cada issue: la
+  épica #6 devuelve la historia #7, y la historia #7 devuelve las tareas #8 y #9. El bug #10 no
+  aparece colgando de ninguno, que es lo correcto.
+- La configuración del sprint, contra la API: campo de tipo Iteration, `duration: 7` días, con
+  *Sprint 1* arrancando el 2026-09-02, y asignado a #7, #8 y #9 — no a la épica ni al bug.
+- La trazabilidad, después de mergear: el issue #8 quedó `CLOSED` con razón `COMPLETED` y con el
+  pull request #11 registrado como el que lo cerró; el tablero lo movió a *Done* solo; y la
+  historia #7 quedó **abierta**, como corresponde porque falta la tarea #9.
+- El límite de trabajo en progreso, mirando el tablero: la columna *In Progress* marcaba 2/2 con
+  la historia y su tarea, o sea que el número efectivamente aprieta y no es decorativo.
