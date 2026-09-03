@@ -427,3 +427,186 @@ asignación de las iteraciones y el merge de los pull requests.
   historia #7 quedó **abierta**, como corresponde porque falta la tarea #9.
 - El límite de trabajo en progreso, mirando el tablero: la columna *In Progress* marcaba 2/2 con
   la historia y su tarea, o sea que el número efectivamente aprieta y no es decorativo.
+
+---
+
+## TP4 — CI: Pipelines as Code
+
+### 1. Estructura del pipeline
+
+**Dos jobs, uno por imagen, corriendo en paralelo.**
+
+```
+backend   ─┐
+           ├─→ ambos tienen que estar verdes para poder mergear
+frontend  ─┘
+```
+
+No están en paralelo por una configuración que lo pida: **están en paralelo porque son
+independientes**. En GitHub Actions, los jobs de un mismo workflow corren simultáneamente salvo
+que uno declare `needs:` sobre otro. Construir el backend no necesita nada del frontend, así que
+no hay ninguna dependencia que declarar.
+
+La medición de la primera corrida lo muestra:
+
+```
+Build imagen del backend:   00:26:48 → 00:27:45   (57 s)
+Build imagen del frontend:  00:26:48 → 00:27:37   (49 s)
+```
+
+Los dos arrancaron **en el mismo segundo**. El pipeline tardó 57 segundos —lo que tardó el más
+lento— y no 106, que sería la suma. Con diez servicios la diferencia deja de ser una curiosidad.
+
+**Qué NO comparten dos jobs**, que es la contracara: cada uno corre en una máquina virtual limpia
+y distinta. No comparten disco, ni variables, ni contenedores, ni el resultado de un `docker
+build`. Todo lo que un job necesite de otro tiene que viajar explícitamente por un artefacto o por
+la caché. Es la razón por la que cada job hace su propio `checkout`: el segundo no tiene el
+repositorio solo porque el primero lo bajó.
+
+**Los dos disparadores** responden preguntas distintas y ninguno sobra:
+
+| Disparador | Pregunta | Cuándo |
+|---|---|---|
+| `pull_request` a `main` | ¿este cambio se puede integrar? | antes del merge, sobre la fusión tentativa |
+| `push` a `main` | ¿`main` sigue sano? | después del merge, sobre lo que quedó |
+
+El segundo no es redundante: entre que un PR se verifica y se mergea, `main` pudo haberse movido
+por otro merge. Dos ramas verdes por separado pueden romper `main` juntas.
+
+### 2. Qué cachea el pipeline, y qué pasa si el caché desaparece
+
+Cachea **capas de imagen de Docker**, en el almacenamiento de GitHub Actions
+(`cache-from`/`cache-to: type=gha`). No cachea el código ni el resultado del build: cachea los
+pasos intermedios de construir cada imagen.
+
+Qué se reutiliza y qué no lo decide el orden de los Dockerfiles, que se escribió pensando en
+esto: primero se copia el manifiesto de dependencias (`requirements.txt`, `package.json` +
+`package-lock.json`) y recién después el código.
+
+| Capa | ¿Se reutiliza? |
+|---|---|
+| Instalar `gcc`, `libc6-dev`, `libpq-dev` | Sí, mientras no cambie el `apt-get` |
+| Compilar los wheels de Python / `npm ci` | Sí, mientras no cambie el manifiesto |
+| Copiar el código (`COPY app`, `COPY . .`) | No: el código cambia en cada commit |
+| Todo lo posterior a la copia del código | No: una capa invalidada invalida las siguientes |
+
+La corrida verde del PR #12 reutilizó **13 capas** marcadas `CACHED` en el log. Lo que se
+reconstruyó fue lo que venía después de copiar el código, que es exactamente lo que había
+cambiado.
+
+**Si el caché desaparece —expira, se limpia, o cambia una dependencia— no se rompe nada: el build
+tarda más.** Esa es la propiedad importante. El caché es una optimización de velocidad, no una
+fuente de verdad: cualquier corrida tiene que poder construir desde cero y dar el mismo
+resultado. Un pipeline que *necesita* el caché para funcionar no es reproducible, y esa es
+justamente la falla que se busca evitar.
+
+Cada imagen usa su propio `scope`. Sin eso, los dos jobs escribirían en la misma clave y se
+pisarían las capas mutuamente: el backend guardaría las suyas, el frontend las sobreescribiría, y
+en la corrida siguiente ninguno encontraría lo que dejó.
+
+### 3. Por qué el pipeline construye con el Dockerfile en vez de compilar por su cuenta
+
+Podría haber puesto `pip install` y `npm run build` como pasos del workflow, sin Docker. Sería más
+rápido de escribir y funcionaría. El problema es qué se estaría verificando.
+
+Con pasos propios, el pipeline verifica que la app compila **en el runner de GitHub**: Ubuntu, con
+las versiones de Python y Node que ese runner traiga. Pero lo que se despliega no es eso: es la
+imagen construida con el Dockerfile, sobre `python:3.11-slim` y `nginx:1.27-alpine`. Serían dos
+entornos distintos, y el pipeline estaría dando por buena una construcción que nadie va a usar.
+
+Construyendo con el Dockerfile, **lo verificado y lo desplegado son el mismo artefacto**. Si el
+build pasa, pasó sobre las mismas imágenes base, las mismas versiones y los mismos pasos que van a
+correr en producción. Es la diferencia entre "compila en algún lado" y "compila donde va a vivir",
+y es el problema que evita: el clásico *funciona en mi máquina*, con el pipeline en el papel de la
+máquina.
+
+Y hay un efecto secundario que importa: la definición del build vive en **un solo lugar**. Si
+mañana el backend necesita una biblioteca de sistema nueva, se agrega al Dockerfile y el pipeline
+la toma sin tocar el workflow. Con pasos duplicados, habría dos definiciones que se desincronizan
+en silencio.
+
+### 4. El pipeline como gate
+
+`main` exige hoy **dos** condiciones para aceptar un merge, y las dos alcanzan también al dueño
+del repositorio (`enforce_admins: true`, que viene del TP1):
+
+1. El cambio entra por Pull Request.
+2. Los dos checks —`Build imagen del backend` y `Build imagen del frontend`— están en verde.
+
+Con **`strict: true`** se suma una tercera condición, más sutil: los checks tienen que haber
+pasado **contra el estado actual de `main`**, no contra el que había cuando se abrió el PR. Si
+`main` se movió, la rama queda *out-of-date* y hay que actualizarla y volver a verificar.
+
+Sin `strict`, dos PRs verdes por separado pueden romper `main` al integrarse juntos: cada uno se
+verificó en un mundo donde el otro no existía. Con `strict`, esa combinación se verifica antes de
+entrar.
+
+**Las dos cosas se vieron pasar en este repositorio**, y no como ejercicio teórico:
+
+- El PR #12 importaba `formatearDuracion` desde `format.js`, donde nunca se había escrito. El job
+  del backend pasó; el del frontend falló con `"formatearDuracion" is not exported by
+  "src/format.js"`, y el merge quedó bloqueado. Se agregó la función faltante, el pipeline pasó a
+  verde y recién ahí se habilitó el botón.
+- Después de mergear el PR #13, ese mismo PR #12 —con sus dos checks verdes— quedó en estado
+  `BEHIND`. GitHub lo bloqueó hasta usar *Update branch*. Eso es `strict: true`.
+
+### 5. Qué problemas encontré y cómo los solucioné
+
+Este práctico fue el que menos fricción tuvo, porque se apoya entero sobre los Dockerfiles del
+TP2: el pipeline no define cómo se construye la aplicación, solo la manda a construir. Lo que sí
+apareció:
+
+#### a) La primera corrida no puede demostrar el caché
+
+La evidencia que pide el enunciado es una corrida que **reutilice** capas, y la primera corrida no
+tiene nada que reutilizar: llena el caché, no lo aprovecha. El `CACHED` aparece recién en la
+segunda. La demostración salió de la secuencia del gate: la corrida que arregló el build del PR
+#12 fue la segunda sobre ese código y reutilizó 13 capas.
+
+#### b) Una trampa que esquivé, y por qué la dejo anotada
+
+En *Required status checks* hay que registrar el nombre **visible** de cada job —`Build imagen del
+backend`— y no su identificador en el YAML (`backend`). Son dos strings distintos y la
+configuración acepta cualquiera de los dos sin protestar, porque no valida contra los workflows
+existentes: se puede exigir un check que no existe.
+
+Si se registra el identificador, el gate queda esperando un check que nunca va a reportar. El PR
+muestra "Expected — Waiting for status to be reported" indefinidamente y no se puede mergear
+nunca, sin ningún mensaje que explique por qué.
+
+No tropecé con esto —usé los nombres visibles desde el principio— pero lo verifiqué en vez de
+darlo por hecho: leí de vuelta la protección desde la API y comparé los dos contextos guardados
+contra los nombres que el workflow publica en cada corrida. Lo dejo anotado porque el modo de
+falla es silencioso, y un gate mal configurado se parece mucho a un gate que funciona.
+
+#### c) Aviso de Node 20 en cada corrida
+
+Las corridas emiten una anotación: las acciones `actions/checkout@v4`,
+`docker/setup-buildx-action@v3` y `docker/build-push-action@v6` apuntan a Node 20, que está
+deprecado, y el runner las fuerza a correr sobre Node 24. Es una **advertencia, no un error**: no
+afecta el resultado y no rompe el build. Se deja registrada acá en vez de silenciarla, porque la
+corrección real es actualizar esas acciones cuando publiquen versiones que apunten a Node 24.
+
+### 6. Declaración de uso de IA
+
+Usé **Claude (Claude Code)** con acceso a la terminal, a `gh` y al repositorio.
+
+**Qué decidí yo:** que el pipeline construyera con los Dockerfiles en vez de compilar por su
+cuenta; que el gate alcanzara también al dueño del repositorio; y qué romper para demostrar que el
+gate bloquea.
+
+**Qué delegué:** la escritura del workflow; la configuración de *Required status checks* por API;
+la ejecución de la secuencia rojo → verde; y los borradores de esta sección.
+
+**Cómo verifiqué lo que me devolvió:**
+
+- El paralelismo, contra los timestamps que devuelve la API de Actions: los dos jobs arrancaron
+  `00:26:48`. No es una afirmación sobre cómo *debería* comportarse, es la medición.
+- El caché, contando las líneas `CACHED` en el log de la corrida verde: 13.
+- El gate, provocando un fallo real y comprobando que el merge quedaba bloqueado — y después
+  comprobando que se habilitaba con el fix. Un gate que nunca bloqueó nada no se sabe si funciona,
+  igual que la protección de rama del TP1.
+- `strict: true`, observando que el PR #12 pasaba a `BEHIND` después de mergear el #13, con sus
+  dos checks todavía en verde.
+- La configuración de la protección, leyéndola de vuelta de la API después de escribirla:
+  `strict: true`, los dos contextos, PR obligatorio y `enforce_admins: true`.
