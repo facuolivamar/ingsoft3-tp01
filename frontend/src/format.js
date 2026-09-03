@@ -37,3 +37,16 @@ export function validarFormulario({ salaId, titulo, responsable, asistentes, ini
 
   return null
 }
+
+/**
+ * Duracion legible a partir de dos fechas ISO: "2 h", "45 min", "1 h 30 min".
+ * Se apoya en duracionEnMinutos para no repetir el calculo.
+ */
+export function formatearDuracion(inicio, fin) {
+  const minutos = duracionEnMinutos(inicio, fin)
+  const horas = Math.floor(minutos / 60)
+  const resto = minutos % 60
+  if (horas === 0) return `${resto} min`
+  if (resto === 0) return `${horas} h`
+  return `${horas} h ${resto} min`
+}

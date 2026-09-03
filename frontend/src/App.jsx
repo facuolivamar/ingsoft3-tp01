@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import * as api from './api.js'
-import { formatearRango, validarFormulario } from './format.js'
+import { formatearRango, formatearDuracion, validarFormulario } from './format.js'
 
 const FORMULARIO_VACIO = {
   salaId: '',
@@ -180,7 +180,7 @@ export default function App() {
                 <div>
                   <strong>{r.titulo}</strong>
                   <span className="meta">
-                    {r.sala.nombre} - {formatearRango(r.inicio, r.fin)} - {r.asistentes} pers. - {r.responsable}
+                    {r.sala.nombre} - {formatearRango(r.inicio, r.fin)} - {formatearDuracion(r.inicio, r.fin)} - {r.asistentes} pers. - {r.responsable}
                   </span>
                 </div>
                 {r.estado === 'confirmada' ? (
