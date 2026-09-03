@@ -1,0 +1,66 @@
+name: CI
+
+# Cuándo corre. Son dos disparadores distintos y responden preguntas distintas:
+#
+#   pull_request  → "¿este cambio se puede integrar?"  Corre ANTES del merge, sobre
+#                   la fusión tentativa de la rama con main. Es el que actúa de gate.
+#   push a main   → "¿main sigue sano?"  Corre DESPUÉS del merge, sobre lo que
+#                   quedó realmente en la rama principal.
+#
+# El segundo no es redundante: entre que un PR se verifica y se mergea, main pudo
+# haberse movido por otro merge.
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+jobs:
+  # Los dos jobs son independientes: no comparten disco, ni red, ni variables.
+  # Cada uno corre en su propia máquina virtual, así que se ejecutan en paralelo
+  # sin que haya que pedirlo. El pipeline tarda lo que tarda el más lento, no la
+  # suma de los dos.
+  backend:
+    name: Build imagen del backend
+    runs-on: ubuntu-latest
+    steps:
+      - name: Traer el código
+        uses: actions/checkout@v4
+
+      # Buildx es el constructor extendido de Docker. Hace falta para poder
+      # exportar e importar el caché de capas, que el build clásico no sabe hacer.
+      - name: Preparar Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Construir con el Dockerfile del repositorio
+        uses: docker/build-push-action@v6
+        with:
+          context: ./backend
+          # No se publica nada acá: este pipeline verifica que compila.
+          # Publicar es otra decisión y otro TP.
+          push: false
+          tags: salas-backend:ci
+          # El caché vive en el almacenamiento de GitHub Actions, no en el runner
+          # —que se destruye al terminar—. El scope separa el caché de cada imagen:
+          # sin él, los dos jobs se pisarían las capas entre sí.
+          cache-from: type=gha,scope=backend
+          cache-to: type=gha,mode=max,scope=backend
+
+  frontend:
+    name: Build imagen del frontend
+    runs-on: ubuntu-latest
+    steps:
+      - name: Traer el código
+        uses: actions/checkout@v4
+
+      - name: Preparar Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Construir con el Dockerfile del repositorio
+        uses: docker/build-push-action@v6
+        with:
+          context: ./frontend
+          push: false
+          tags: salas-frontend:ci
+          cache-from: type=gha,scope=frontend
+          cache-to: type=gha,mode=max,scope=frontend
