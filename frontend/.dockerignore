@@ -1,0 +1,10 @@
+# node_modules NUNCA entra al contexto: se instala dentro de la imagen, con las
+# dependencias resueltas para el sistema operativo del contenedor.
+node_modules/
+dist/
+.env
+*.local
+.git/
+.gitignore
+.vscode/
+.idea/

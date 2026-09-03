@@ -1,0 +1,14 @@
+# Todo lo que no hace falta para construir la imagen. Cada archivo que no entra
+# en el contexto es tiempo de build ahorrado y superficie de imagen que no existe.
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.venv/
+venv/
+.env
+*.local
+.git/
+.gitignore
+tests/
+.vscode/
+.idea/

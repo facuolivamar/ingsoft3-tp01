@@ -1,0 +1,66 @@
+# Levanta el sistema completo: base de datos, API y frontend.
+#
+#   cp .env.example .env
+#   docker compose up -d
+#
+# Las tres imagenes se CONSTRUYEN localmente desde los Dockerfile del repo.
+# La variante que las BAJA de un registry esta en docker-compose.registry.yml.
+
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+    volumes:
+      # Volumen con nombre: los datos viven fuera del contenedor y sobreviven a
+      # `docker compose down`. Solo `down -v` los borra.
+      - datos_db:/var/lib/postgresql/data
+    healthcheck:
+      # Postgres acepta conexiones bastante despues de que el contenedor arranca.
+      # Sin esta sonda, el backend intentaria conectarse contra una base que
+      # todavia no escucha.
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped
+
+  backend:
+    build:
+      context: ./backend
+    environment:
+      # "db" es el nombre del servicio: la red de compose lo resuelve por DNS.
+      # Por eso la cadena de conexion no tiene ninguna IP.
+      POSTGRES_HOST: db
+      POSTGRES_PORT: 5432
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+    ports:
+      - "${PUERTO_API:-8000}:8000"
+    depends_on:
+      db:
+        # depends_on solo espera a que el contenedor ARRANQUE. Con
+        # condition: service_healthy espera a que la sonda de arriba pase.
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/health')"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 10s
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: ./frontend
+    ports:
+      - "${PUERTO_WEB:-8080}:80"
+    depends_on:
+      - backend
+    restart: unless-stopped
+
+volumes:
+  datos_db:

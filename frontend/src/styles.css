@@ -1,0 +1,183 @@
+:root {
+  --fondo: #0f1115;
+  --panel: #171a21;
+  --borde: #262b36;
+  --texto: #e6e9ef;
+  --tenue: #9aa3b2;
+  --acento: #4f8cff;
+  --error: #ff6b6b;
+  --ok: #4ade80;
+  color-scheme: dark;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: var(--fondo);
+  color: var(--texto);
+  font: 15px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+
+main {
+  max-width: 780px;
+  margin: 0 auto;
+  padding: 32px 20px 64px;
+}
+
+header h1 {
+  margin: 0;
+  font-size: 28px;
+  letter-spacing: -0.02em;
+}
+
+header p {
+  margin: 4px 0 28px;
+  color: var(--tenue);
+}
+
+.panel {
+  background: var(--panel);
+  border: 1px solid var(--borde);
+  border-radius: 12px;
+  padding: 20px;
+  margin-bottom: 20px;
+}
+
+.panel h2 {
+  margin: 0 0 16px;
+  font-size: 17px;
+}
+
+form {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: 1fr 1fr;
+}
+
+form label {
+  display: grid;
+  gap: 6px;
+  font-size: 13px;
+  color: var(--tenue);
+}
+
+form label:nth-child(1),
+form label:nth-child(2) {
+  grid-column: 1 / -1;
+}
+
+input,
+select,
+button {
+  font: inherit;
+  padding: 9px 11px;
+  border-radius: 8px;
+  border: 1px solid var(--borde);
+  background: #0f1218;
+  color: var(--texto);
+}
+
+button {
+  grid-column: 1 / -1;
+  background: var(--acento);
+  border-color: var(--acento);
+  color: #fff;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+button:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.secundario {
+  grid-column: auto;
+  background: transparent;
+  border-color: var(--borde);
+  color: var(--tenue);
+  font-weight: 500;
+  padding: 6px 12px;
+}
+
+.hint {
+  grid-column: 1 / -1;
+  margin: 0;
+  color: var(--tenue);
+  font-size: 13px;
+}
+
+.error {
+  color: var(--error);
+  margin: 14px 0 0;
+}
+
+.aviso {
+  color: var(--ok);
+  margin: 14px 0 0;
+}
+
+.vacio {
+  color: var(--tenue);
+  margin: 0;
+}
+
+.encabezado-lista {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+}
+
+.encabezado-lista h2 {
+  margin: 0;
+}
+
+.reservas {
+  list-style: none;
+  margin: 16px 0 0;
+  padding: 0;
+  display: grid;
+  gap: 10px;
+}
+
+.reservas li {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  border: 1px solid var(--borde);
+  border-radius: 10px;
+  padding: 12px 14px;
+}
+
+.reservas li.cancelada {
+  opacity: 0.5;
+}
+
+.reservas li.cancelada strong {
+  text-decoration: line-through;
+}
+
+.meta {
+  display: block;
+  color: var(--tenue);
+  font-size: 13px;
+  margin-top: 3px;
+}
+
+.etiqueta {
+  color: var(--tenue);
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+@media (max-width: 560px) {
+  form {
+    grid-template-columns: 1fr;
+  }
+}
