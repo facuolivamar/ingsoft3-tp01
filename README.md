@@ -1,5 +1,7 @@
 # Salas — reserva de salas de reunión
 
+[![CI](https://github.com/facuolivamar/ingsoft3-tp01/actions/workflows/ci.yml/badge.svg)](https://github.com/facuolivamar/ingsoft3-tp01/actions/workflows/ci.yml)
+
 App del semestre de **Ingeniería de Software 3 — UCC 2026**, y repositorio donde se acumulan
 los prácticos: cada TP agrega una capa de automatización sobre el mismo código.
 
@@ -83,6 +85,15 @@ El navegador nunca le habla directo al backend: le pega a `/api` en su mismo ori
 reenvía a `http://backend:8000`. `backend` es el nombre del servicio en Compose, y lo resuelve
 el DNS de la red interna — por eso no hay ninguna dirección IP en el código.
 
+## Verificación automática
+
+Cada Pull Request hacia `main` y cada push a `main` construyen las dos imágenes con los
+Dockerfiles de este repositorio, en jobs paralelos y con caché de capas. `main` no acepta un merge
+si el pipeline no está en verde — y la regla alcanza también al dueño del repositorio.
+
+El estado de la última corrida es el badge de arriba; el detalle está en la pestaña
+[Actions](https://github.com/facuolivamar/ingsoft3-tp01/actions).
+
 ## Documentación de los prácticos
 
 - **[decisiones.md](decisiones.md)** — las decisiones técnicas de cada TP y su porqué, los
@@ -95,3 +106,5 @@ el DNS de la red interna — por eso no hay ninguna dirección IP en el código.
 |---|---|---|
 | TP1 — Git colaborativo | [`v1.0.0`](https://github.com/facuolivamar/ingsoft3-tp01/releases/tag/v1.0.0) | `main` protegida, flujo de Pull Requests, conflicto resuelto |
 | TP2 — Contenedores | [`v2.0.0`](https://github.com/facuolivamar/ingsoft3-tp01/releases/tag/v2.0.0) | La app del semestre, Dockerfiles multi-stage, Compose e imágenes publicadas |
+| TP3 — Planificación | [`v3.0.0`](https://github.com/facuolivamar/ingsoft3-tp01/releases/tag/v3.0.0) | Jerarquía de trabajo, sprint, tablero con límite de WIP y trazabilidad |
+| TP4 — CI | [`v4.0.0`](https://github.com/facuolivamar/ingsoft3-tp01/releases/tag/v4.0.0) | Pipeline de build en cada PR, con caché de capas y actuando como gate de merge |
