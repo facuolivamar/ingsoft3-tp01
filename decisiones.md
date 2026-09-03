@@ -292,3 +292,58 @@ contra la API; y los borradores de este archivo y de `evidencias.md`.
 - El diagnóstico de `libc6-dev` no se aceptó como explicación: se reprodujo el fallo y el éxito en
   contenedores sueltos, y se confirmó con `ls /usr/include/stdio.h` en los dos casos.
 - El arranque desde cero se verificó siguiendo el README, no de memoria.
+
+---
+
+## TP3 — Planificación y trazabilidad
+
+### 1. Duración del sprint: 1 semana
+
+La materia entrega un práctico por semana y la clase funciona como evento de revisión. Un sprint
+de una semana hace que el corte del sprint coincida con el momento en que hay algo que mostrar:
+el final de la iteración y la demostración caen juntos, que es para lo que sirve el corte.
+
+Con dos semanas, cada sprint cruzaría dos entregas y el límite dejaría de significar algo — sería
+una fecha en el calendario sin nada que la haga cierta. Con menos de una semana, la ceremonia
+(planificar, revisar, ajustar) pesaría más que el trabajo que se planifica.
+
+El contraargumento que reconozco: cursando otras materias, la capacidad real por semana calendario
+es baja, y una semana deja poco margen para una historia completa. Si en la práctica veo que las
+historias no entran, el ajuste correcto es partirlas más chicas antes que alargar el sprint —
+porque una historia que no entra en el sprint viola la *S* de INVEST, y ése es el problema real.
+
+### 2. Límite de trabajo en progreso: 2
+
+La regla de arranque es **cantidad de personas + 1**. Trabajando solo: 2.
+
+El "+1" es la válvula. Con límite 1, cada vez que mi única tarjeta queda esperando algo que no
+depende de mí —el pipeline corriendo, una revisión— me quedaría sin nada que hacer. Con 2 puedo
+avanzar en otra cosa mientras tanto, sin que eso se convierta en empezar todo.
+
+Con 3 o más, trabajando solo, el límite dejaría de limitar: tendría todo empezado y nada terminado,
+que es exactamente lo que la restricción viene a evitar. El trabajo empezado y sin terminar no es
+avance, es inventario, y el inventario cuesta — más cambio de contexto, ramas que envejecen, y
+conflictos más grandes al integrar.
+
+**La señal para ajustarlo**: si nunca lo alcanzo, está demasiado alto y no está limitando nada.
+Hoy el tablero muestra *In Progress 2/2*, o sea que el número efectivamente aprieta. Si lo
+alcanzara seguido pero porque todo está bloqueado por afuera, el problema no sería el límite sino
+el bloqueo, y subir el número sólo escondería el síntoma.
+
+Vale aclarar que GitHub **no lo impide**: pone el contador de la columna en rojo y deja pasar
+igual. Es un acuerdo de trabajo, no un candado de la herramienta.
+
+### 3. Diagnóstico de la historia mal escrita
+
+> `Como desarrollador quiero crear la tabla usuarios para guardar los datos.`
+
+<!-- ====================================================================== -->
+<!-- ESCRIBÍ ACÁ TU DIAGNÓSTICO, CON TUS PALABRAS. Dos renglones alcanzan.  -->
+<!-- Qué tiene que responder:                                              -->
+<!--   a) por qué está mal escrita                                         -->
+<!--   b) cómo la reescribirías                                            -->
+<!-- Borrá estos comentarios cuando termines.                              -->
+<!-- ====================================================================== -->
+
+TU DIAGNÓSTICO ACÁ.
+
