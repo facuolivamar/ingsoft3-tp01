@@ -17,7 +17,22 @@ RUN apt-get update \
 COPY requirements.txt .
 RUN pip wheel --no-cache-dir --wheel-dir /wheels -r requirements.txt
 
-# ---- Etapa 2: runtime (imagen final, sin compilador) ----
+# ---- Etapa 2: tests (parte del build: ya tiene las wheels compiladas) ----
+# Parte de `build` para testear las MISMAS dependencias que viajan a la imagen
+# final. Suma pytest y pytest-cov (requirements-dev.txt), que nunca llegan a
+# runtime. ENTRYPOINT y no RUN: los tests corren en el `docker run` del
+# pipeline, que monta /out para sacar los reportes del contenedor.
+FROM build AS test
+RUN pip install --no-cache-dir --no-index --find-links=/wheels -r requirements.txt
+COPY requirements-dev.txt .
+RUN pip install --no-cache-dir -r requirements-dev.txt
+COPY .coveragerc pytest.ini ./
+COPY app ./app
+COPY tests ./tests
+ENV COVERAGE_FILE=/out/.coverage
+ENTRYPOINT ["pytest", "--junitxml=/out/tests.xml", "--cov-report=xml:/out/coverage.xml", "--cov-report=html:/out/htmlcov"]
+
+# ---- Etapa 3: runtime (imagen final, sin compilador) ----
 FROM python:3.11-slim AS runtime
 
 # libpq5 es la biblioteca cliente que psycopg2 necesita para *correr*.

@@ -1,0 +1,18 @@
+# Que ENTRA en la cuenta de cobertura. Se mide la logica que decide (rules.py)
+# y los endpoints que la orquestan (main.py). Quedan afuera:
+#   - config.py y db.py: arranque y cableado (leer variables, crear el engine).
+#     No toman decisiones; un test ahi solo verificaria que SQLAlchemy existe.
+#   - models.py y schemas.py: declaraciones de datos (columnas, campos). No
+#     tienen ramas propias que se puedan equivocar.
+[run]
+branch = True
+source = app
+omit =
+    app/config.py
+    app/db.py
+    app/models.py
+    app/schemas.py
+
+[report]
+show_missing = True
+skip_empty = True

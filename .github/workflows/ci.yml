@@ -36,8 +36,8 @@ jobs:
         uses: docker/build-push-action@v6
         with:
           context: ./backend
-          # No se publica nada acá: este pipeline verifica que compila.
-          # Publicar es otra decisión y otro TP.
+          # No se publica nada acá: este paso verifica que la imagen final
+          # compila. Publicar es otra decisión y otro TP.
           push: false
           tags: salas-backend:ci
           # El caché vive en el almacenamiento de GitHub Actions, no en el runner
@@ -45,6 +45,42 @@ jobs:
           # sin él, los dos jobs se pisarían las capas entre sí.
           cache-from: type=gha,scope=backend
           cache-to: type=gha,mode=max,scope=backend
+
+      # ---- TP5: tests + coverage + umbral ----
+      # Se construye la etapa `test` del Dockerfile (parte de `build`) y se
+      # corre. Su propio scope de cache: ahora son cuatro builds distintos.
+      - name: Construir la etapa de tests
+        uses: docker/build-push-action@v6
+        with:
+          context: ./backend
+          target: test
+          load: true            # sin esto el docker run no encuentra la imagen
+          push: false
+          tags: backend-test:ci
+          cache-from: type=gha,scope=backend-test
+          cache-to: type=gha,mode=max,scope=backend-test
+
+      # pytest sale con codigo != 0 si falla un test O si la cobertura queda
+      # abajo de --cov-fail-under (pytest.ini). Cualquiera de los dos pone el
+      # job en rojo, y como el job es required check, frena el merge.
+      - name: Correr los tests con coverage (umbral en pytest.ini)
+        run: docker run --rm -v "${{ github.workspace }}/out:/out" backend-test:ci
+
+      - name: Resumen de coverage en la corrida
+        if: ${{ !cancelled() }}
+        run: |
+          echo "## Coverage del backend (pytest-cov, lineas + ramas)" >> $GITHUB_STEP_SUMMARY
+          docker run --rm --entrypoint coverage -v "${{ github.workspace }}/out:/out" backend-test:ci             report --format=markdown >> $GITHUB_STEP_SUMMARY
+
+      - name: Publicar coverage y resultados
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-backend
+          path: |
+            out/htmlcov
+            out/coverage.xml
+            out/tests.xml
 
   frontend:
     name: Build imagen del frontend
@@ -64,3 +100,42 @@ jobs:
           tags: salas-frontend:ci
           cache-from: type=gha,scope=frontend
           cache-to: type=gha,mode=max,scope=frontend
+
+      # ---- TP5: tests + coverage + umbral ----
+      - name: Construir la etapa de tests
+        uses: docker/build-push-action@v6
+        with:
+          context: ./frontend
+          target: test
+          load: true
+          push: false
+          tags: frontend-test:ci
+          cache-from: type=gha,scope=frontend-test
+          cache-to: type=gha,mode=max,scope=frontend-test
+
+      # vitest sale con 1 si un test falla o si no se cumplen los
+      # coverage.thresholds de vite.config.js.
+      - name: Correr los tests con coverage (umbral en vite.config.js)
+        run: docker run --rm -v "${{ github.workspace }}/out:/out" frontend-test:ci
+
+      - name: Resumen de coverage en la corrida
+        if: ${{ !cancelled() }}
+        run: |
+          f=out/coverage/coverage-summary.json
+          {
+            echo "## Coverage del frontend (vitest + v8)"
+            echo "| Metrica | Cubierto | Total | % |"
+            echo "|---|---|---|---|"
+            for m in lines branches functions statements; do
+              jq -r --arg m "$m" '.total[$m] | "| \($m) | \(.covered) | \(.total) | \(.pct) |"' "$f"
+            done
+          } >> $GITHUB_STEP_SUMMARY
+
+      - name: Publicar coverage y resultados
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-frontend
+          path: |
+            out/coverage
+            out/tests.xml
