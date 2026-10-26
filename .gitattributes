@@ -1,0 +1,2 @@
+# Los scripts de shell corren en bash (tambien en el runner Windows): siempre LF.
+*.sh text eol=lf
