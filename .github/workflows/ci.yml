@@ -204,7 +204,9 @@ jobs:
       url: http://localhost:8081
     defaults:
       run:
-        shell: '"C:\Program Files\Git\bin\bash.exe" --noprofile --norc -eo pipefail {0}'
+        # Git Bash por ruta corta (sin espacios): el runner es Windows y su shell
+        # por defecto es PowerShell, cuyo curl no es curl.
+        shell: C:/PROGRA~1/Git/bin/bash.exe --noprofile --norc -eo pipefail {0}
     env:
       TAG: sha-${{ github.sha }}
       DB_PASSWORD: ${{ secrets.DB_PASSWORD }}   # environment secret de qa
@@ -235,7 +237,9 @@ jobs:
       url: http://localhost:8082
     defaults:
       run:
-        shell: '"C:\Program Files\Git\bin\bash.exe" --noprofile --norc -eo pipefail {0}'
+        # Git Bash por ruta corta (sin espacios): el runner es Windows y su shell
+        # por defecto es PowerShell, cuyo curl no es curl.
+        shell: C:/PROGRA~1/Git/bin/bash.exe --noprofile --norc -eo pipefail {0}
     env:
       TAG: sha-${{ github.sha }}               # la MISMA imagen que paso QA
       DB_PASSWORD: ${{ secrets.DB_PASSWORD }}   # environment secret de production
