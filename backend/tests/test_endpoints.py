@@ -95,3 +95,25 @@ def test_cancelar_reserva_inexistente_o_ya_cancelada_falla(reserva, codigo):
 
     assert error.value.status_code == codigo
     db.commit.assert_not_called()
+
+
+def test_ocupacion_de_sala_consulta_las_confirmadas_y_devuelve_el_porcentaje():
+    ahora = datetime(2026, 11, 2, 10, 0)
+    reserva = SimpleNamespace(inicio=ahora, fin=ahora + timedelta(hours=1))
+    db = _db_con(SimpleNamespace(id=3, capacidad=6), confirmadas=[reserva])
+
+    resultado = main.ocupacion_de_sala(3, ahora, ahora + timedelta(hours=2), db)
+
+    assert resultado == {"sala_id": 3, "porcentaje": 50}
+    db.scalars.assert_called_once()
+
+
+@pytest.mark.parametrize("sala, horas, codigo", [(None, 2, 404), (SimpleNamespace(id=3), 0, 422)])
+def test_ocupacion_de_sala_inexistente_o_ventana_invalida_falla(sala, horas, codigo):
+    ahora = datetime(2026, 11, 2, 10, 0)
+    db = _db_con(sala)
+
+    with pytest.raises(HTTPException) as error:
+        main.ocupacion_de_sala(3, ahora, ahora + timedelta(hours=horas), db)
+
+    assert error.value.status_code == codigo
