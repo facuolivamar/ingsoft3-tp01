@@ -25,7 +25,10 @@ ENTRYPOINT ["npx", "vitest", "run", "--coverage", "--reporter=default", "--repor
 # La imagen final no tiene Node: es un servidor web con archivos HTML, CSS y JS.
 FROM nginx:1.27-alpine AS runtime
 
-COPY nginx.conf /etc/nginx/conf.d/default.conf
+# Va a templates/, no a conf.d/: el entrypoint de nginx lo procesa con
+# envsubst al arrancar el contenedor (ver nginx.conf).
+COPY nginx.conf /etc/nginx/templates/default.conf.template
+ENV BACKEND_URL=http://backend:8000
 COPY --from=build /build/dist /usr/share/nginx/html
 
 EXPOSE 80

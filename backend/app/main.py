@@ -45,9 +45,10 @@ def preparar_base() -> None:
             db.commit()
 
 
-@app.get("/api/health")
+@app.api_route("/api/health", methods=["GET", "HEAD"])
 def health():
-    """Sonda de salud: la usa el healthcheck del contenedor."""
+    """Sonda de salud: la usan el healthcheck del contenedor, el smoke test del
+    pipeline y el monitor externo (que pregunta con HEAD)."""
     return {"status": "ok"}
 
 
