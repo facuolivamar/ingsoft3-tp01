@@ -610,3 +610,178 @@ la ejecución de la secuencia rojo → verde; y los borradores de esta sección.
   dos checks todavía en verde.
 - La configuración de la protección, leyéndola de vuelta de la API después de escribirla:
   `strict: true`, los dos contextos, PR obligatorio y `enforce_admins: true`.
+
+---
+
+## TP5 — Calidad automatizada: tests, coverage y el umbral que frena un merge
+
+### Enlaces de este TP
+
+| Lo que prueba | Enlace |
+|---|---|
+| Corrida con el resumen de cobertura de los dos lados y los reportes descargables (`coverage-backend`, `coverage-frontend`) | https://github.com/facuolivamar/ingsoft3-tp01/actions/runs/40393007612 |
+| Corrida **roja por umbral** (27 tests en verde, `FAIL Required test coverage of 80% not reached. Total coverage: 72.37%`) | https://github.com/facuolivamar/ingsoft3-tp01/actions/runs/40394126834 |
+| Secuencia rojo → tests → verde → merge (PR **mergeado**) | https://github.com/facuolivamar/ingsoft3-tp01/pull/16 |
+| El freno vigente: PR **abierto y en rojo** hasta la defensa | https://github.com/facuolivamar/ingsoft3-tp01/pull/17 |
+
+### 1. Qué lógica testeé y por qué ésa
+
+En Salas un bug duele en un solo lugar: **una reserva que no debería existir** (dos equipos en la
+misma sala, una reunión de 6 h, 10 personas en un box de 4). Todo eso lo decide
+`backend/app/rules.py`, así que la suite está parada ahí:
+
+| Regla | Tests (backend) | Qué la pone en rojo si la invierto |
+|---|---|---|
+| 1 · no reservar en el pasado | `test_validar_rango_rechaza_una_reserva_que_empieza_en_el_pasado` | cambiar `inicio < ahora` por `>` |
+| 2 y 3 · fin posterior, 30 min a 4 h | parametrizado con 4 filas de rechazo + 2 de bordes aceptados (30 y 240 min) | correr `<` a `<=` en cualquiera de los dos límites: el borde exacto se pone rojo |
+| 4 · capacidad | parametrizados de aceptación (1 y 6 = capacidad) y de rechazo (0 y 7) | `>` por `>=`: la fila «6 de 6» falla |
+| 5 · solapamiento | 5 filas: los dos extremos que se tocan **conviven**, los tres solapes reales chocan | `<` por `<=` en `se_solapan`: las filas de extremos se ponen rojas |
+| transición confirmada → cancelada | permite la futura; rechaza la cancelada y la que empieza **justo ahora** (borde del `<=`) | `<=` por `<`: la fila «empieza ahora» falla |
+| ocupación (agregada en el PR #16) | 6 filas: ventana libre, mitad, reservas que cruzan cada borde, afuera, y el tope de 100 | sacar el `max`/`min` del recorte: las filas que cruzan los bordes fallan |
+
+Backend: **37 tests** en `backend/tests/` (16 funciones, varias parametrizadas). Frontend: **20
+tests** en `frontend/src/*.test.js` sobre `validarFormulario` (el espejo de las reglas en el
+cliente), `formatearDuracion` y el cliente HTTP `api.js`.
+
+**Las tres técnicas, de los dos lados:**
+
+| | Backend (pytest) | Frontend (vitest) |
+|---|---|---|
+| Parametrizado | `@pytest.mark.parametrize` (p. ej. bordes de duración) | `it.each` (8 casos de rechazo de `validarFormulario`) |
+| Caso de error | `pytest.raises(ReglaViolada, match=…)`, 404/409 de los endpoints | `rejects.toThrow('La reserva ya estaba cancelada.')`, y `Error 502` cuando no hay cuerpo |
+| Mock | `MagicMock` en lugar de la `Session` de SQLAlchemy (`tests/test_endpoints.py`) | `vi.fn()` en lugar de `fetch`, con `vi.stubGlobal` (`src/api.test.js`) |
+
+**El mock del backend, sin refactor:** los endpoints ya reciben la sesión por parámetro
+(`db: Session = Depends(get_db)`), así que la dependencia entraba desde afuera desde el TP2. El test
+le pasa un `MagicMock` configurado (`db.get` devuelve la sala, `db.scalars().all()` las reservas
+confirmadas) y verifica **la interacción**: que con una reserva válida se llama `db.add` una vez con
+una `Reserva` confirmada y se hace `commit`, y que con una regla violada se devuelve 409 **y no se
+llama ni a `add` ni a `commit`**. Eso un stub no lo puede verificar, porque sólo devuelve datos: es
+la diferencia entre los dos.
+
+**El mock del frontend:** `api.js` usa el `fetch` global. El test lo reemplaza con un `vi.fn()` que
+devuelve una respuesta falsa, y verifica URL, método y cuerpo del pedido, sin salir a la red.
+
+### 2. Mi stack no es el de la cátedra: qué usé en cada fila
+
+| Lo que pide | Lo que usé |
+|---|---|
+| Dónde viven los tests | `backend/tests/` (pytest) · `frontend/src/*.test.js` (vitest) |
+| Parametrizado | `@pytest.mark.parametrize` · `it.each` |
+| El doble | `unittest.mock.MagicMock` · `vi.fn()` + `vi.stubGlobal` |
+| Medir la cobertura | `pytest-cov` con `--cov-branch` · `@vitest/coverage-v8` |
+| Umbral que rompe el build | `--cov-fail-under=80` en `backend/pytest.ini` · `coverage.thresholds` en `frontend/vite.config.js` |
+| Qué entra en la cuenta | `omit =` en `backend/.coveragerc` · `include`/`exclude` en `vite.config.js` |
+| Reporte legible | `--cov-report=html`, y `coverage report --format=markdown` al Summary · reporters `html` + `json-summary` (el Summary lo arma `jq`) |
+| Herramientas dentro de la etapa de tests | `requirements-dev.txt`, instalado **sólo** en la etapa `test` del Dockerfile · el `npm ci` de `build` ya trae las devDependencies |
+
+Los dos Dockerfiles tienen ahora tres etapas: `build` → **`test`** (`FROM build`) → `runtime`. El
+pipeline construye `target: test` con `load: true`, la corre con `docker run -v …/out:/out` y saca
+los reportes por ese volumen. La imagen final no se lleva ni pytest ni vitest.
+
+### 3. El umbral: 80 %, y sobre qué métrica
+
+- **Backend: 80 % del total de coverage.py con `branch = True`**, que **combina líneas y ramas** en
+  un solo número: `(líneas cubiertas + ramas cubiertas) / (líneas + ramas)`. No es «sólo líneas»: un
+  `if` recorrido por un solo lado resta.
+- **Frontend: 80 % de líneas y 80 % de ramas**, las dos por separado (`thresholds.lines` y
+  `thresholds.branches`).
+
+**Por qué 80 y no otro número** — lo fijé contra la medición real, no copiado:
+
+| | Líneas | Ramas | Total |
+|---|---|---|---|
+| Backend, hoy (`main`) | 90,5 % (105/116) | **88,9 % (32/36)** | 90,1 % |
+| Frontend, hoy (`main`) | 89,4 % | **100 %** | — |
+
+Ese margen de ~10 puntos deja lugar para el pegamento que no vale la pena testear con unit tests
+(los listados, el arranque), pero **no** alcanza para que entre una regla nueva sin tests: la de
+ocupación (~20 líneas con 4 ramas) bajó el total a 72 %, y la de reservas recurrentes a 78,5 %. Justo
+eso es lo que el umbral tiene que atrapar.
+
+**Si mañana lo subo diez puntos (90 %)**: el backend hoy pasa por 0,1 punto, así que cualquier
+cambio en los endpoints de listado frenaría el build. Para sostenerlo habría que cubrir
+`listar_salas`, `listar_reservas` y el `startup` — consultas sin lógica: subiría el número sin subir
+lo que se verifica. Para eso sirven mejor los tests de integración del TP7.
+
+### 4. Qué dejé afuera de la cuenta
+
+- **Backend** (`.coveragerc`): `config.py` y `db.py` (arranque y cableado: leer variables y crear el
+  engine; no deciden nada), `models.py` y `schemas.py` (declaraciones de columnas y campos, sin ramas
+  propias). **Sí entra** `main.py` entero, con sus endpoints.
+- **Frontend** (`vite.config.js`): entra sólo `src/**/*.js` — `format.js` y `api.js`. Quedan afuera
+  los componentes (`App.jsx`, `main.jsx`), porque son UI que se verifica con las e2e del TP7 y no con
+  unit tests sin DOM, y los propios `*.test.js`.
+
+### 5. Por qué coverage alto no garantiza calidad — con mi ejemplo
+
+`rules.py` tiene **100 %** de líneas y ramas. Pero este test sumaría exactamente lo mismo:
+
+```python
+def test_que_no_verifica_nada():
+    try:
+        rules.validar_capacidad(10, capacidad_sala=6)
+    except Exception:
+        pass
+```
+
+Recorre la línea del `raise` y pasa en verde aunque la regla esté invertida. La cobertura mide **qué
+se ejecutó**, no **qué se comprobó**: lo que verifica es el `assert`/`match=` del test real. La forma
+de comprobarlo es invertir la regla y ver qué se pone en rojo — lo que hice para la tabla de la
+sección 1, que es la idea del *mutation testing*.
+
+### 6. El Pull Request bloqueado
+
+- **PR #16** (mergeado): agregué `porcentaje_de_ocupacion` y su endpoint sin tests. Compilaba, y los
+  **27 tests existentes pasaban**. El check que se puso en rojo fue **«Build imagen del backend»**,
+  en el paso *Correr los tests con coverage*: `FAIL Required test coverage of 80% not reached. Total
+  coverage: 72.37%`. La métrica es el **total combinado líneas + ramas** (116 líneas con 30 sin
+  cubrir, 36 ramas). El segundo commit agregó los tests que faltaban (6 filas parametrizadas de
+  ocupación, la ventana inválida y los caminos del endpoint): 37 tests, 90,13 %, verde, merge.
+- **PR #17** (abierto, en rojo): reservas recurrentes, también sin tests: 78,53 %. Queda así hasta la
+  defensa.
+
+**Por qué este freno es distinto del del TP4**: el del TP4 frenaba código que **no compila**. Éste
+frena código que compila y no rompe ningún test, pero que **nadie verificó**. **Qué deja pasar
+igual**: código testeado con asserts vacíos (sección 5), errores de integración con la base real (el
+mock dice que se llamó a `db.add`, no que Postgres aceptó la fila) y todo lo que pasa en el
+navegador.
+
+### 7. El ejercicio del camino sin cubrir
+
+En el reporte HTML del backend, `app/main.py`, **línea 62**: `if sala_id is not None:` en
+`listar_reservas`. Ningún test llama a ese endpoint, así que **ninguno de sus dos caminos** se
+recorre: son 2 de las 4 ramas que faltan (88,9 % de ramas).
+
+- **Qué entrada lo recorrería:** `listar_reservas(sala_id=2, db=mock)` para el camino del `if` (el
+  que agrega el `where`), y `listar_reservas(sala_id=None, db=mock)` para el otro.
+- **Qué decidí: no lo agregué.** Con un mock, el test sólo comprobaría que se llamó a `db.scalars`; no
+  si el `where` filtra bien, que es lo único que puede fallar ahí. Ese filtro se verifica contra una
+  base real en la suite de integración del TP7 (`GET /api/reservas?sala_id=…`).
+
+### 8. Problemas encontrados y cómo los resolví
+
+- **El `.dockerignore` del backend excluía `tests/`** (lo había puesto en el TP2 para que no
+  viajaran a la imagen), y la etapa `test` no encontraba nada que correr. Lo saqué: la imagen final
+  igual no los lleva, porque `runtime` copia sólo `app/`.
+- **`psycopg2` no instala en Windows sin `pg_config`**, y yo quería correr los tests en mi máquina
+  antes de cada push. En el pipeline no es problema (corren en el contenedor, con las wheels de la
+  etapa `build`); localmente uso un entorno virtual con `psycopg2-binary`.
+- **El resumen del backend en el Summary**: `pytest-cov` no escribe Markdown. Lo resolví con un
+  segundo `docker run` de la misma imagen que corre `coverage report --format=markdown` y lee el
+  `.coverage` que quedó en el volumen (`COVERAGE_FILE=/out/.coverage`).
+
+### 9. Declaración de uso de IA
+
+Usé **Claude (Claude Code)** con acceso a la terminal, a `gh` y al repositorio.
+
+**Qué decidí yo:** dónde duele un bug en esta app (las reglas), el umbral y su métrica, qué queda
+afuera de la cuenta, y qué hacer con el camino sin cubrir.
+
+**Qué delegué:** la escritura de los tests, de la etapa `test` de los Dockerfiles y de los pasos del
+workflow; la secuencia de los dos PRs; los borradores de esta sección.
+
+**Cómo verifiqué lo que me devolvió:** corrí la suite localmente antes de cada push; comprobé que el
+umbral frena **de verdad** con la corrida roja del PR #16 (27 tests en verde, job en rojo); y revisé
+cada test contra la tabla de la sección 1: qué assert lo pone en rojo si se invierte la regla. Lo que
+la suite **no** cubre está dicho en las secciones 6 y 7.
