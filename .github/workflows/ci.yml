@@ -15,6 +15,11 @@ on:
   push:
     branches: [main]
 
+# GITHUB_TOKEN con lo justo: leer el codigo y escribir paquetes en ghcr.io.
+permissions:
+  contents: read
+  packages: write
+
 jobs:
   # Los dos jobs son independientes: no comparten disco, ni red, ni variables.
   # Cada uno corre en su propia máquina virtual, así que se ejecutan en paralelo
@@ -82,6 +87,29 @@ jobs:
             out/coverage.xml
             out/tests.xml
 
+      # ---- TP6: publicar el artefacto ----
+      # ULTIMOS pasos del job: solo se llega aca si la imagen compilo y los
+      # tests + el umbral pasaron. Y solo en main: un PR verifica, no publica.
+      # La etiqueta es el commit: sha-<commit> dice exactamente de que codigo
+      # salio la imagen. No se publica `latest` (ver decisiones.md, TP6/TP7).
+      - name: Entrar al registry
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Construir y publicar la imagen
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        uses: docker/build-push-action@v6
+        with:
+          context: ./backend
+          push: true
+          tags: ghcr.io/facuolivamar/salas-backend:sha-${{ github.sha }}
+          labels: org.opencontainers.image.source=https://github.com/${{ github.repository }}
+          cache-from: type=gha,scope=backend
+
   frontend:
     name: Build imagen del frontend
     runs-on: ubuntu-latest
@@ -139,3 +167,89 @@ jobs:
           path: |
             out/coverage
             out/tests.xml
+
+      # ---- TP6: publicar el artefacto ----
+      # ULTIMOS pasos del job: solo se llega aca si la imagen compilo y los
+      # tests + el umbral pasaron. Y solo en main: un PR verifica, no publica.
+      # La etiqueta es el commit: sha-<commit> dice exactamente de que codigo
+      # salio la imagen. No se publica `latest` (ver decisiones.md, TP6/TP7).
+      - name: Entrar al registry
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Construir y publicar la imagen
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        uses: docker/build-push-action@v6
+        with:
+          context: ./frontend
+          push: true
+          tags: ghcr.io/facuolivamar/salas-frontend:sha-${{ github.sha }}
+          labels: org.opencontainers.image.source=https://github.com/${{ github.repository }}
+          cache-from: type=gha,scope=frontend
+
+  # ---- TP6: entrega continua ----
+  # Plan C: los entornos son proyectos de Compose en el self-hosted runner (la
+  # notebook). El deploy lo hace SIEMPRE este job, nunca un compose a mano.
+  deploy-qa:
+    name: Deploy a QA
+    needs: [backend, frontend]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: self-hosted
+    environment:
+      name: qa
+      url: http://localhost:8081
+    defaults:
+      run:
+        shell: '"C:\Program Files\Git\bin\bash.exe" --noprofile --norc -eo pipefail {0}'
+    env:
+      TAG: sha-${{ github.sha }}
+      DB_PASSWORD: ${{ secrets.DB_PASSWORD }}   # environment secret de qa
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Bajar las imagenes de este commit y levantar QA
+        run: |
+          echo "Desplegando $TAG en QA"
+          docker compose -f compose.qa.yml pull
+          docker compose -f compose.qa.yml up -d --remove-orphans
+
+      - name: Smoke test con reintentos
+        env:
+          URL_API: http://localhost:8001
+          URL_WEB: http://localhost:8081
+        run: ./scripts/smoke.sh
+
+  deploy-prod:
+    name: Deploy a PROD
+    needs: deploy-qa
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: self-hosted
+    # El gate humano: el environment production tiene required reviewer. El
+    # job queda en "Waiting for review" hasta que alguien aprueba o rechaza.
+    environment:
+      name: production
+      url: http://localhost:8082
+    defaults:
+      run:
+        shell: '"C:\Program Files\Git\bin\bash.exe" --noprofile --norc -eo pipefail {0}'
+    env:
+      TAG: sha-${{ github.sha }}               # la MISMA imagen que paso QA
+      DB_PASSWORD: ${{ secrets.DB_PASSWORD }}   # environment secret de production
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Bajar las imagenes de este commit y levantar PROD
+        run: |
+          echo "Desplegando $TAG en PROD"
+          docker compose -f compose.prod.yml pull
+          docker compose -f compose.prod.yml up -d --remove-orphans
+
+      - name: Smoke test con reintentos
+        env:
+          URL_API: http://localhost:8002
+          URL_WEB: http://localhost:8082
+        run: ./scripts/smoke.sh

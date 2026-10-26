@@ -56,6 +56,8 @@ services:
   frontend:
     build:
       context: ./frontend
+    environment:
+      BACKEND_URL: http://backend:8000
     ports:
       - "${PUERTO_WEB:-8080}:80"
     depends_on:
