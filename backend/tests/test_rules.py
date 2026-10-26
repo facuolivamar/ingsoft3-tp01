@@ -116,3 +116,33 @@ def test_validar_cancelable_permite_cancelar_una_confirmada_futura():
 def test_validar_cancelable_rechaza_canceladas_o_ya_empezadas(estado, inicio, mensaje):
     with pytest.raises(ReglaViolada, match=mensaje):
         rules.validar_cancelable(estado, inicio, AHORA)
+
+
+# ---- Ocupacion de una sala ----
+
+def _reserva(desde_h, hasta_h):
+    return SimpleNamespace(
+        inicio=MANANA_10 + timedelta(hours=desde_h), fin=MANANA_10 + timedelta(hours=hasta_h)
+    )
+
+
+@pytest.mark.parametrize(
+    "reservas, esperado",
+    [
+        ([], 0),                                   # sala libre
+        ([_reserva(0, 2)], 50),                    # la mitad de una ventana de 4 h
+        ([_reserva(-1, 1)], 25),                   # empieza antes: solo cuenta lo de adentro
+        ([_reserva(3, 6)], 25),                    # termina despues: idem
+        ([_reserva(5, 6)], 0),                     # totalmente afuera de la ventana
+        ([_reserva(0, 4), _reserva(0, 4)], 100),   # datos inconsistentes: nunca mas de 100
+    ],
+)
+def test_porcentaje_de_ocupacion_cuenta_solo_lo_que_cae_en_la_ventana(reservas, esperado):
+    desde, hasta = MANANA_10, MANANA_10 + timedelta(hours=4)
+
+    assert rules.porcentaje_de_ocupacion(reservas, desde, hasta) == esperado
+
+
+def test_porcentaje_de_ocupacion_rechaza_una_ventana_vacia():
+    with pytest.raises(ReglaViolada, match="positiva"):
+        rules.porcentaje_de_ocupacion([], MANANA_10, MANANA_10)

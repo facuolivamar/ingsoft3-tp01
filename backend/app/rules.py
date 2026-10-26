@@ -91,3 +91,24 @@ def validar_cancelable(estado: str, inicio: datetime, ahora: datetime) -> None:
         raise ReglaViolada("La reserva ya estaba cancelada.")
     if inicio <= ahora:
         raise ReglaViolada("No se puede cancelar una reserva que ya empezo.")
+
+
+def porcentaje_de_ocupacion(reservas_de_la_sala, desde: datetime, hasta: datetime) -> int:
+    """Que porcentaje de la ventana [desde, hasta) esta ocupado por reservas.
+
+    Solo cuenta la parte de cada reserva que cae adentro de la ventana: una
+    reserva que empieza antes de `desde` aporta solo desde `desde`.
+    """
+    if hasta <= desde:
+        raise ReglaViolada("La ventana de tiempo tiene que ser positiva.")
+
+    ventana = hasta - desde
+    ocupado = timedelta(0)
+    for reserva in reservas_de_la_sala:
+        inicio = max(reserva.inicio, desde)
+        fin = min(reserva.fin, hasta)
+        if fin > inicio:
+            ocupado += fin - inicio
+
+    porcentaje = round(ocupado / ventana * 100)
+    return min(porcentaje, 100)
