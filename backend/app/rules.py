@@ -112,3 +112,29 @@ def porcentaje_de_ocupacion(reservas_de_la_sala, desde: datetime, hasta: datetim
 
     porcentaje = round(ocupado / ventana * 100)
     return min(porcentaje, 100)
+
+
+def fechas_de_una_serie(inicio: datetime, cada_dias: int, repeticiones: int) -> list[datetime]:
+    """Fechas de inicio de una reserva recurrente (p. ej. la daily de todos los dias).
+
+    Una serie tiene entre 2 y 12 repeticiones, y se repite cada 1 a 14 dias.
+    """
+    if not 2 <= repeticiones <= 12:
+        raise ReglaViolada("Una serie tiene entre 2 y 12 repeticiones.")
+    if not 1 <= cada_dias <= 14:
+        raise ReglaViolada("Una serie se repite cada 1 a 14 dias.")
+
+    fechas = []
+    for n in range(repeticiones):
+        fecha = inicio + timedelta(days=cada_dias * n)
+        if fecha.weekday() >= 5:
+            # sabados y domingos la oficina esta cerrada: se saltea esa fecha
+            continue
+        fechas.append(fecha)
+    return fechas
+
+
+def validar_serie_sin_solapamiento(fechas, duracion: timedelta, reservas_de_la_sala) -> None:
+    """Cada ocurrencia de la serie tiene que pasar la regla 5 por separado."""
+    for fecha in fechas:
+        validar_sin_solapamiento(fecha, fecha + duracion, reservas_de_la_sala)
