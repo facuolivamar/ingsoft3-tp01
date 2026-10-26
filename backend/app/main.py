@@ -64,6 +64,26 @@ def listar_reservas(sala_id: int | None = None, db: Session = Depends(get_db)):
     return db.scalars(consulta).all()
 
 
+@app.get("/api/salas/{sala_id}/ocupacion")
+def ocupacion_de_sala(sala_id: int, desde: datetime, hasta: datetime, db: Session = Depends(get_db)):
+    """Porcentaje de la ventana pedida en que la sala esta reservada."""
+    if db.get(Sala, sala_id) is None:
+        raise HTTPException(status_code=404, detail="La sala no existe.")
+
+    confirmadas = db.scalars(
+        select(Reserva).where(
+            Reserva.sala_id == sala_id,
+            Reserva.estado == ESTADO_CONFIRMADA,
+        )
+    ).all()
+
+    try:
+        porcentaje = rules.porcentaje_de_ocupacion(confirmadas, desde, hasta)
+    except rules.ReglaViolada as error:
+        raise HTTPException(status_code=422, detail=error.mensaje) from error
+    return {"sala_id": sala_id, "porcentaje": porcentaje}
+
+
 @app.post("/api/reservas", response_model=ReservaOut, status_code=201)
 def crear_reserva(datos: ReservaCrear, db: Session = Depends(get_db)):
     """Aplica las cinco reglas de negocio antes de persistir."""
