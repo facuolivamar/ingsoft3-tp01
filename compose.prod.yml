@@ -3,8 +3,9 @@
 #   - name: proyecto de Compose propio (sin esto, desplegar uno mata al otro)
 #   - puertos del lado host: web 8082, api 8002
 #   - volumen propio: cada entorno tiene SU base de datos
-# Las imagenes NO se construyen aca: se bajan del registry por la etiqueta
-# sha-<commit> que publico el CI. TAG y DB_PASSWORD los pone el pipeline.
+# Las imagenes NO se construyen aca: son las del registry, etiqueta
+# sha-<commit>, que el pipeline ya cargo con docker load (pull_policy: never).
+# TAG y DB_PASSWORD los pone el pipeline.
 name: salas-prod
 
 services:
@@ -25,6 +26,7 @@ services:
 
   backend:
     image: ghcr.io/facuolivamar/salas-backend:${TAG:?falta TAG}
+    pull_policy: never
     environment:
       POSTGRES_HOST: db
       POSTGRES_PORT: 5432
@@ -40,6 +42,7 @@ services:
 
   frontend:
     image: ghcr.io/facuolivamar/salas-frontend:${TAG}
+    pull_policy: never
     environment:
       # Se lee al arrancar (template de nginx). Es la misma imagen en los dos
       # entornos; lo que cambia es a que api apunta.

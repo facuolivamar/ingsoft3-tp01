@@ -191,12 +191,41 @@ jobs:
           labels: org.opencontainers.image.source=https://github.com/${{ github.repository }}
           cache-from: type=gha,scope=frontend
 
+  # ---- Plan C: la imagen del registry viaja al runner como archivo ----
+  # Docker Desktop de la notebook (runner self-hosted) tiene bloqueado el pull
+  # desde ghcr.io (politica de la cuenta). En vez de reconstruir alla, este job
+  # -en un runner de GitHub- BAJA del registry la imagen recien publicada por
+  # su etiqueta sha-<commit>, imprime su digest y la exporta con docker save.
+  # El runner la carga con docker load: es la MISMA imagen (mismo digest), no
+  # una reconstruccion. Ver decisiones.md, TP6/TP7.
+  exportar-imagenes:
+    name: Exportar imagenes publicadas
+    needs: [backend, frontend]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Bajar del registry las imagenes de este commit (sin credenciales)
+        run: |
+          for c in backend frontend; do
+            img=ghcr.io/facuolivamar/salas-$c:sha-${{ github.sha }}
+            docker pull "$img"
+            echo "$img -> $(docker inspect --format '{{index .RepoDigests 0}}' "$img")" | tee -a $GITHUB_STEP_SUMMARY
+          done
+          docker save -o imagenes.tar             ghcr.io/facuolivamar/salas-backend:sha-${{ github.sha }}             ghcr.io/facuolivamar/salas-frontend:sha-${{ github.sha }}
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: imagenes-${{ github.sha }}
+          path: imagenes.tar
+          retention-days: 7
+          compression-level: 0
+
   # ---- TP6: entrega continua ----
   # Plan C: los entornos son proyectos de Compose en el self-hosted runner (la
   # notebook). El deploy lo hace SIEMPRE este job, nunca un compose a mano.
   deploy-qa:
     name: Deploy a QA
-    needs: [backend, frontend]
+    needs: exportar-imagenes
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: self-hosted
     environment:
@@ -213,10 +242,18 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Bajar las imagenes de este commit y levantar QA
+      - uses: actions/download-artifact@v4
+        with:
+          name: imagenes-${{ github.sha }}
+
+      - name: Cargar las imagenes de este commit y levantar QA
         run: |
           echo "Desplegando $TAG en QA"
-          docker compose -f compose.qa.yml pull
+          docker load -i imagenes.tar
+          for c in backend frontend; do
+            docker image inspect --format "ghcr.io/facuolivamar/salas-$c:$TAG -> {{index .RepoDigests 0}}" ghcr.io/facuolivamar/salas-$c:$TAG
+          done
+          rm -f imagenes.tar
           docker compose -f compose.qa.yml up -d --remove-orphans
 
       - name: Smoke test con reintentos
@@ -246,10 +283,18 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Bajar las imagenes de este commit y levantar PROD
+      - uses: actions/download-artifact@v4
+        with:
+          name: imagenes-${{ github.sha }}
+
+      - name: Cargar las imagenes de este commit y levantar PROD
         run: |
           echo "Desplegando $TAG en PROD"
-          docker compose -f compose.prod.yml pull
+          docker load -i imagenes.tar
+          for c in backend frontend; do
+            docker image inspect --format "ghcr.io/facuolivamar/salas-$c:$TAG -> {{index .RepoDigests 0}}" ghcr.io/facuolivamar/salas-$c:$TAG
+          done
+          rm -f imagenes.tar
           docker compose -f compose.prod.yml up -d --remove-orphans
 
       - name: Smoke test con reintentos
