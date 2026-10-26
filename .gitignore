@@ -21,3 +21,8 @@ venv/
 Thumbs.db
 .vscode/
 .idea/
+
+# reportes de coverage (los produce el pipeline como artefacto)
+coverage/
+htmlcov/
+.coverage

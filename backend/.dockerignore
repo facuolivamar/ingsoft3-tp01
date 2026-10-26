@@ -9,6 +9,7 @@ venv/
 *.local
 .git/
 .gitignore
-tests/
+htmlcov/
+.coverage
 .vscode/
 .idea/
