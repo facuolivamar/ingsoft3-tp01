@@ -34,7 +34,7 @@ services:
       POSTGRES_DB: salas_qa
       # Sentry (TP9). El DSN no es un secreto: identifica el proyecto,
       # no da acceso a leer nada.
-      SENTRY_DSN: https://179a430adeee60c509ba8187ccdea34e@o4512325542150144.ingest.us.sentry.io/4512325556633600
+      SENTRY_DSN: https://d0df78ed9458475d3f71e49bcb7d3df1@o4512325542150144.ingest.us.sentry.io/4512325564628992
       SENTRY_ENVIRONMENT: qa
       SENTRY_RELEASE: ${TAG}
     ports:

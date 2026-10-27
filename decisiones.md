@@ -1107,3 +1107,86 @@ Usé **Claude (Claude Code)** con acceso a la terminal, a Docker y a `gh`. **Esc
 curls de verificación. **Yo** elegí el riel y los puertos, y revisé que nada tocara `salas-qa` ni
 `salas-prod`. Para la defensa tengo que poder leer el plan en voz alta, explicar de dónde sale cada
 dirección derivada y por qué el destroy va web → api → db; si no puedo explicarlo, no lo entrego.
+
+---
+
+## TP9 — DevSecOps + Observabilidad + Continuous Feedback
+
+### Enlaces
+
+| Lo que prueba | Enlace |
+|---|---|
+| `dependabot.yml` (pip, npm, actions, Docker) | https://github.com/facuolivamar/ingsoft3-tp01/blob/main/.github/dependabot.yml |
+| PR de Dependabot **mergeado**, con el pipeline en verde | https://github.com/facuolivamar/ingsoft3-tp01/pull/35 |
+| Code scanning (CodeQL, configuración por defecto) | https://github.com/facuolivamar/ingsoft3-tp01/security/code-scanning |
+| Sentry en el código | `backend/app/observabilidad.py`, `frontend/src/main.jsx` (PR #45) |
+| Tarjeta del tablero nacida de un dato | https://github.com/facuolivamar/ingsoft3-tp01/issues/49 (en https://github.com/users/facuolivamar/projects/2) |
+
+Activado en *Settings → Advanced Security*: alertas de Dependabot, **actualizaciones de seguridad**
+de Dependabot, secret scanning y **push protection**.
+
+### 1. El PR de Dependabot que mergeé
+
+**#35: `psycopg2` 2.9.10 → 2.9.13** (backend). Me animé porque: es un **patch** (sólo arreglos según
+SemVer); el driver es exactamente lo que verifica mi suite de **integración** contra el Postgres de
+QA (TP7), y pasó 3/3; y el pipeline completo quedó en verde hasta PROD (corrida
+https://github.com/facuolivamar/ingsoft3-tp01/actions/runs/40432667913, aprobada).
+
+Los que **no** mergeé y por qué: `vite` 6→8, `vitest` 3→5, `react` 18→19 y `@vitejs/plugin-react`
+4→6 son **mayores** y sus PRs ya están en rojo en el pipeline (rompen el build o los tests): el gate
+los frenó, que es justo lo que tiene que hacer. `fastapi` 0.115→0.162 pasó, pero es un salto grande
+en una librería pre-1.0; lo dejo para revisarlo con tiempo.
+
+### 2. Producción observada (monitor externo)
+
+**Pendiente.** UptimeRobot es un servicio externo y mi PROD vive en `localhost:8082` (plan C): no
+la puede ver. Para hacerlo hay que exponer la api de PROD con un túnel público temporal
+(p. ej. `cloudflared tunnel --url http://localhost:8002`), crear el monitor HTTP sobre
+`<url-del-túnel>/api/health` cada 5 min, provocar la caída con `docker stop salas-prod-backend-1`,
+esperar el DOWN, `docker start`, esperar el UP y pausar el monitor. Ya dejé preparado lo que hacía
+falta del lado de la app: **`/api/health` contesta también `HEAD`** (`curl -I` → 200), que es como
+pregunta el plan gratuito de UptimeRobot.
+
+### 3. Sentry: errores, demoras y uso
+
+Backend con `sentry-sdk[fastapi]` (`app/observabilidad.py`, se prende sólo si hay `SENTRY_DSN`: los
+unit tests no mandan nada) y frontend con `@sentry/react` + `browserTracingIntegration`. Cada entorno
+manda su `environment` (`qa` / `production`) y el backend manda como `release` la etiqueta
+`sha-<commit>` que está corriendo. Los dos con `tracesSampleRate: 1.0`: con este tráfico sobra la
+cuota gratis y cada pedido aparece en la tabla de uso y demoras.
+
+Errores provocados: `GET /api/debug-sentry` (un `RuntimeError` a propósito, en PROD) y
+`window.errorDePruebaSentry()` en el navegador. El endpoint de prueba **se saca** en un PR después
+de mostrar el error en la defensa (si pasaron 30 días, se vuelve a subir por PR, como pide §3.5).
+
+**Operación más usada y más lenta:** en mi tráfico, la más usada es **`GET /api/reservas`** (la
+llama cada carga de la página y cada cambio de filtro) y la más lenta **`POST /api/reservas`** (es la
+única que hace dos consultas —sala y reservas confirmadas— más la escritura). Medido contra QA con
+`curl`: `/api/health` ~5 ms, `/api/salas` ~7 ms, `/api/reservas` ~8 ms. La tabla de Sentry con el
+uso real se muestra en la defensa.
+
+**Tarjeta del tablero (#49):** el error de JavaScript llegó a Sentry, pero en el navegador no pasó
+nada visible: la app no tiene ninguna barrera ante un error no capturado. La tarjeta pide un
+`Sentry.ErrorBoundary` con pantalla de recuperación.
+
+### 4. Problemas y cómo los resolví
+
+- **El DSN del backend daba `403 … rejected with_reason: ProjectId`**: el primero que copié era de
+  un proyecto que ya no existía. Lo detecté mandando un evento con `debug=True` desde el contenedor
+  de QA, y lo reemplacé por el DSN correcto, que verifiqué igual antes de subirlo.
+- **Dependabot abrió 17 PRs de golpe** (los cinco ecosistemas a la vez). No los mergeo en bloque: el
+  pipeline frena los mayores, y los patch van de a uno.
+
+### 5. DORA (práctica, medido sobre este repo)
+
+- **Frecuencia de deploy a PROD:** 4 deploys el 26/10 (incluido el rollback de práctica).
+- **Lead time** (merge → PROD): ~8 min de pipeline + lo que tarda la aprobación.
+- **Tasa de falla de cambios:** 1 de 4 cambios a `main` frenado antes de PROD (el botón, TP7).
+- **Tiempo de restauración:** **60 s**, medido (TP6, rollback).
+
+### 6. Declaración de uso de IA
+
+Usé **Claude (Claude Code)**: escribió la integración de Sentry, el `dependabot.yml`, activó la
+seguridad del repo por API y redactó estos borradores. Yo creé las cuentas y los proyectos de Sentry
+y UptimeRobot, elegí qué PR de Dependabot mergear y la tarjeta. Lo verifiqué viendo llegar los
+errores a Sentry y con el pipeline en verde del PR #35.
