@@ -30,7 +30,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Traer el código
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       # Buildx es el constructor extendido de Docker. Hace falta para poder
       # exportar e importar el caché de capas, que el build clásico no sabe hacer.
@@ -126,7 +126,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Traer el código
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Preparar Buildx
         uses: docker/setup-buildx-action@v3
@@ -233,7 +233,7 @@ jobs:
       TAG: sha-${{ github.sha }}
       DB_PASSWORD: ${{ secrets.DB_PASSWORD }}   # environment secret de qa
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Bajar del registry las imagenes de este commit y levantar QA
         run: |
@@ -267,7 +267,7 @@ jobs:
       API_BASE_URL: http://localhost:8001
       REPORTE: playwright-report-integracion
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Dependencias
         run: npm ci
       - name: Suite de integracion (Playwright request, sin navegador)
@@ -305,7 +305,7 @@ jobs:
       API_BASE_URL: http://localhost:8001
       REPORTE: playwright-report-e2e
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Dependencias y navegador
         run: |
           npm ci
@@ -352,7 +352,7 @@ jobs:
       TAG: sha-${{ github.sha }}               # la MISMA imagen que paso QA
       DB_PASSWORD: ${{ secrets.DB_PASSWORD }}   # environment secret de production
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Bajar del registry la MISMA imagen que verifico QA y levantar PROD
         run: |
