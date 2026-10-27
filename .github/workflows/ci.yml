@@ -94,7 +94,7 @@ jobs:
       # salio la imagen. No se publica `latest` (ver decisiones.md, TP6/TP7).
       - name: Entrar al registry
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-        uses: docker/login-action@v3
+        uses: docker/login-action@v4
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
@@ -102,7 +102,7 @@ jobs:
 
       - name: Entrar a Docker Hub
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-        uses: docker/login-action@v3
+        uses: docker/login-action@v4
         with:
           username: facuolivam
           password: ${{ secrets.DOCKERHUB_TOKEN }}
@@ -186,7 +186,7 @@ jobs:
       # salio la imagen. No se publica `latest` (ver decisiones.md, TP6/TP7).
       - name: Entrar al registry
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-        uses: docker/login-action@v3
+        uses: docker/login-action@v4
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
@@ -194,7 +194,7 @@ jobs:
 
       - name: Entrar a Docker Hub
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-        uses: docker/login-action@v3
+        uses: docker/login-action@v4
         with:
           username: facuolivam
           password: ${{ secrets.DOCKERHUB_TOKEN }}
