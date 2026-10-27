@@ -1,0 +1,11 @@
+# Terraform: NUNCA se versionan el estado (tiene la contraseña en claro),
+# los providers descargados ni los valores de las variables.
+# El .terraform.lock.hcl SÍ se versiona (fija las versiones exactas).
+*.tfstate
+*.tfstate.*
+.terraform/
+*.tfvars
+*.tfvars.json
+crash.log
+tfplan
+*.tfplan
