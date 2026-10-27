@@ -150,7 +150,7 @@ export default function App() {
           {errorLocal && <p className="hint">{errorLocal}</p>}
 
           <button type="submit" disabled={Boolean(errorLocal) || cargando}>
-            {cargando ? 'Reservando...' : 'Confirmar reserva'}
+            {cargando ? 'Reservando...' : 'Reservar'}
           </button>
         </form>
 
