@@ -1139,13 +1139,31 @@ en una librería pre-1.0; lo dejo para revisarlo con tiempo.
 
 ### 2. Producción observada (monitor externo)
 
-**Pendiente.** UptimeRobot es un servicio externo y mi PROD vive en `localhost:8082` (plan C): no
-la puede ver. Para hacerlo hay que exponer la api de PROD con un túnel público temporal
-(p. ej. `cloudflared tunnel --url http://localhost:8002`), crear el monitor HTTP sobre
-`<url-del-túnel>/api/health` cada 5 min, provocar la caída con `docker stop salas-prod-backend-1`,
-esperar el DOWN, `docker start`, esperar el UP y pausar el monitor. Ya dejé preparado lo que hacía
-falta del lado de la app: **`/api/health` contesta también `HEAD`** (`curl -I` → 200), que es como
-pregunta el plan gratuito de UptimeRobot.
+Mi PROD vive en `localhost:8082` (plan C), y UptimeRobot es un servicio externo: no la puede ver.
+Por eso abrí un **túnel público temporal** con `cloudflared` (quick tunnel, sin cuenta) **sólo hacia
+la api de PROD** (`http://localhost:8002`), y el monitor HTTP(s) de UptimeRobot pregunta cada 5 min
+por `https://<túnel>.trycloudflare.com/api/health`. Antes comprobé que el endpoint contesta **HEAD**
+(el plan gratuito pregunta así): 200 por el túnel.
+
+**La caída provocada** (26/10, hora local):
+
+| Hora | Qué pasó |
+|---|---|
+| 23:02:47 | `docker stop salas-prod-backend-1` (la caída) |
+| 23:04 | UptimeRobot marca **DOWN** y manda el mail |
+| 23:05:08 | `docker start salas-prod-backend-1`; `/api/health` vuelve a dar 200 |
+| 23:09 | UptimeRobot marca **UP** |
+
+**Tiempo de detección: ~1 minuto** (me enteré por el monitor, no por un usuario). La vuelta a UP
+tardó ~4 min porque el monitor recién vuelve a preguntar en su siguiente intervalo de 5 min.
+Al terminar, el monitor quedó **pausado**.
+
+**La letra chica del plan C:** la URL `*.trycloudflare.com` cambia cada vez que se abre el túnel, y
+el túnel vive mientras corre `cloudflared` en la notebook. Para mostrarlo en la defensa: abro el
+túnel (`C:\cloudflared\cloudflared.exe tunnel --url http://localhost:8002`), edito la URL del
+monitor y lo reanudo. Lo que pierdo frente a la nube: un monitor que mira PROD de verdad desde afuera
+todo el tiempo; acá, si la notebook se apaga, se cae «todo» y el monitor no distingue eso de una
+caída de la app.
 
 ### 3. Sentry: errores, demoras y uso
 
@@ -1188,5 +1206,6 @@ nada visible: la app no tiene ninguna barrera ante un error no capturado. La tar
 
 Usé **Claude (Claude Code)**: escribió la integración de Sentry, el `dependabot.yml`, activó la
 seguridad del repo por API y redactó estos borradores. Yo creé las cuentas y los proyectos de Sentry
-y UptimeRobot, elegí qué PR de Dependabot mergear y la tarjeta. Lo verifiqué viendo llegar los
+y UptimeRobot y el monitor, elegí qué PR de Dependabot mergear y la tarjeta. Claude abrió el túnel
+y provocó la caída; las horas de DOWN y UP las leí yo en UptimeRobot. Lo verifiqué viendo llegar los
 errores a Sentry y con el pipeline en verde del PR #35.
