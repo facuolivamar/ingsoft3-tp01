@@ -209,7 +209,7 @@ jobs:
           for c in backend frontend; do
             img=ghcr.io/facuolivamar/salas-$c:sha-${{ github.sha }}
             docker pull "$img"
-            echo "$img -> $(docker inspect --format '{{index .RepoDigests 0}}' "$img")" | tee -a $GITHUB_STEP_SUMMARY
+            echo "$img -> digest $(docker inspect --format '{{index .RepoDigests 0}}' "$img") / id $(docker inspect --format '{{.Id}}' "$img")" | tee -a $GITHUB_STEP_SUMMARY
           done
           docker save -o imagenes.tar             ghcr.io/facuolivamar/salas-backend:sha-${{ github.sha }}             ghcr.io/facuolivamar/salas-frontend:sha-${{ github.sha }}
 
@@ -251,7 +251,9 @@ jobs:
           echo "Desplegando $TAG en QA"
           docker load -i imagenes.tar
           for c in backend frontend; do
-            docker image inspect --format "ghcr.io/facuolivamar/salas-$c:$TAG -> {{index .RepoDigests 0}}" ghcr.io/facuolivamar/salas-$c:$TAG
+            # docker load no trae el RepoDigest; el id (digest de la config) si, y
+            # tiene que coincidir con el que imprimio el job exportar-imagenes.
+            docker image inspect --format "ghcr.io/facuolivamar/salas-$c:$TAG -> id {{.Id}}" ghcr.io/facuolivamar/salas-$c:$TAG
           done
           rm -f imagenes.tar
           docker compose -f compose.qa.yml up -d --remove-orphans
@@ -292,7 +294,9 @@ jobs:
           echo "Desplegando $TAG en PROD"
           docker load -i imagenes.tar
           for c in backend frontend; do
-            docker image inspect --format "ghcr.io/facuolivamar/salas-$c:$TAG -> {{index .RepoDigests 0}}" ghcr.io/facuolivamar/salas-$c:$TAG
+            # docker load no trae el RepoDigest; el id (digest de la config) si, y
+            # tiene que coincidir con el que imprimio el job exportar-imagenes.
+            docker image inspect --format "ghcr.io/facuolivamar/salas-$c:$TAG -> id {{.Id}}" ghcr.io/facuolivamar/salas-$c:$TAG
           done
           rm -f imagenes.tar
           docker compose -f compose.prod.yml up -d --remove-orphans
