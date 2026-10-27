@@ -35,7 +35,7 @@ jobs:
       # Buildx es el constructor extendido de Docker. Hace falta para poder
       # exportar e importar el caché de capas, que el build clásico no sabe hacer.
       - name: Preparar Buildx
-        uses: docker/setup-buildx-action@v3
+        uses: docker/setup-buildx-action@v4
 
       - name: Construir con el Dockerfile del repositorio
         uses: docker/build-push-action@v6
@@ -129,7 +129,7 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Preparar Buildx
-        uses: docker/setup-buildx-action@v3
+        uses: docker/setup-buildx-action@v4
 
       - name: Construir con el Dockerfile del repositorio
         uses: docker/build-push-action@v6
