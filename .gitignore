@@ -26,3 +26,7 @@ Thumbs.db
 coverage/
 htmlcov/
 .coverage
+
+# reportes de Playwright
+playwright-report*/
+test-results/
