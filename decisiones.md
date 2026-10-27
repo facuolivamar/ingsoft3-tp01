@@ -785,3 +785,72 @@ workflow; la secuencia de los dos PRs; los borradores de esta sección.
 umbral frena **de verdad** con la corrida roja del PR #16 (27 tests en verde, job en rojo); y revisé
 cada test contra la tabla de la sección 1: qué assert lo pone en rojo si se invierte la regla. Lo que
 la suite **no** cubre está dicho en las secciones 6 y 7.
+
+## TP8 — Infraestructura como Código
+
+### 1. Riel y versiones
+
+- **Plan C: Terraform + provider Docker, 100 % local.** QA y PROD ya corren en esta notebook con
+  `compose.qa.yml` / `compose.prod.yml` sobre el self-hosted runner (TP6/TP7), no tengo cuentas de
+  nube, y el Docker Desktop de esta máquina no puede bajar de `ghcr.io` — por eso las imágenes del
+  TP7 se leen de Docker Hub (`docker.io/facuolivam/salas-*`).
+- **Versiones fijadas:** Terraform `required_version = ">= 1.5"` (uso 1.9.8) y
+  `kreuzwerker/docker` `~> 3.0`; el `.terraform.lock.hcl` versionado fija la exacta (**3.9.0**).
+- **Qué declara `infra/`:** un entorno nuevo, `preprod`, con 8 recursos — red
+  `salas-preprod-net`, volumen `salas-preprod-db-data`, las tres imágenes y los contenedores
+  `salas-preprod-db` (postgres:16-alpine), `salas-preprod-api` (host 8003) y `salas-preprod-web`
+  (host 8083). Los puertos no chocan con QA (8001/8081) ni PROD (8002/8082), y los nombres tampoco.
+
+### 2. Qué es variable y qué se deriva
+
+- **Variables:** `api_tag` (sin default: el `sha-<commit>` que publicó el pipeline) y `db_password`
+  (`sensitive`, sin default). La contraseña la paso con `TF_VAR_db_password` en la terminal; nunca
+  está en el HCL.
+- **Derivado:** el `POSTGRES_HOST` de la api es `docker_container.db.name`, y el `BACKEND_URL` del
+  front es `http://${docker_container.api.name}:${docker_container.api.ports[0].internal}`. Si
+  renombro un contenedor, la referencia se actualiza sola, y además esas referencias le dan a
+  Terraform el orden: red/volumen/imágenes → db → api → web al crear, y al revés al destruir.
+- **El estado vive fuera del repo y del workspace**: `backend "local"` con
+  `-backend-config="path=$HOME/tfstate/salas-preprod.tfstate"`. El `infra/.gitignore` (creado antes
+  del primer apply) cubre `*.tfstate*`, `.terraform/`, `*.tfvars` y los planes guardados.
+
+### 3. Lo que probé
+
+- **Nace:** `init` → `plan` (8 to add) → `apply`. Respondieron `GET /api/health`, `GET /api/salas`
+  (toca la base: devuelve las salas sembradas), el front en `:8083/` y `:8083/api/salas` (el nginx
+  de preprod hablando con *su* api, no con la de QA).
+- **Idempotencia:** el segundo `plan` dijo «No changes».
+- **Drift:** `docker rm -f salas-preprod-api` → el `plan` lo vio (`docker_container.api will be
+  created`, 1 to add) → `apply` lo recreó, las URLs volvieron a responder y el `plan` siguiente dio
+  «No changes».
+- **Ciclo de vida:** `destroy` (8 destroyed; quedaron sólo los contenedores, volúmenes y redes de
+  `salas-qa` y `salas-prod`) → `apply` (8 added) → las cuatro URLs respondieron de nuevo → `destroy`
+  otra vez. **Preprod queda destruido**: tiene que poder nacer, no estar vivo.
+- **El estado por dentro:** la contraseña está en claro en el `.tfstate` (dentro del `env` de los
+  contenedores). `sensitive` sólo la oculta en la salida del plan; por eso el estado no va al repo.
+
+### 4. Problemas y cómo los resolví
+
+- **«Arrancó ≠ está listo» otra vez:** `depends_on` espera que se *cree* el contenedor de la base,
+  no que postgres acepte conexiones. En el primer apply la api se cayó una vez y Docker la levantó
+  sola gracias a `restart = "unless-stopped"` (RestartCount 1). El provider no tiene el
+  `service_healthy` de Compose; por eso los curls van con reintentos.
+- **El `destroy` y las imágenes compartidas:** `postgres:16-alpine` también la usan QA y PROD. Puse
+  `keep_locally = true` en los `docker_image` para que el destroy no intente borrarlas del Docker
+  local.
+- **El host del provider en Windows:** el daemon de Docker Desktop está en
+  `npipe:////./pipe/dockerDesktopLinuxEngine`; quedó como default de la variable `docker_host`.
+- **Riesgo conocido, no resuelto:** nginx resuelve `salas-preprod-api` al arrancar. Si la api se
+  recrea sola (drift) y toma otra IP, el front seguiría apuntando a la vieja hasta reiniciarlo. En
+  mi prueba de drift siguió respondiendo, pero no lo forcé.
+- **Lo que sigue siendo artesanal:** QA y PROD siguen siendo Compose; preprod es el único entorno
+  declarado con Terraform. Y el estado es un archivo de una sola máquina: si hubiera una segunda,
+  haría falta un backend compartido.
+
+### 5. Declaración de uso de IA
+
+Usé **Claude (Claude Code)** con acceso a la terminal, a Docker y a `gh`. **Escribió el HCL** de
+`infra/` y **corrió el ciclo** completo (init, plan, apply, idempotencia, drift, destroy/apply) y los
+curls de verificación. **Yo** elegí el riel y los puertos, y revisé que nada tocara `salas-qa` ni
+`salas-prod`. Para la defensa tengo que poder leer el plan en voz alta, explicar de dónde sale cada
+dirección derivada y por qué el destroy va web → api → db; si no puedo explicarlo, no lo entrego.
