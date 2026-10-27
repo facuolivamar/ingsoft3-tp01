@@ -38,7 +38,7 @@ jobs:
         uses: docker/setup-buildx-action@v3
 
       - name: Construir con el Dockerfile del repositorio
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: ./backend
           # No se publica nada acá: este paso verifica que la imagen final
@@ -55,7 +55,7 @@ jobs:
       # Se construye la etapa `test` del Dockerfile (parte de `build`) y se
       # corre. Su propio scope de cache: ahora son cuatro builds distintos.
       - name: Construir la etapa de tests
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: ./backend
           target: test
@@ -109,7 +109,7 @@ jobs:
 
       - name: Construir y publicar la imagen
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: ./backend
           push: true
@@ -132,7 +132,7 @@ jobs:
         uses: docker/setup-buildx-action@v3
 
       - name: Construir con el Dockerfile del repositorio
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: ./frontend
           push: false
@@ -142,7 +142,7 @@ jobs:
 
       # ---- TP5: tests + coverage + umbral ----
       - name: Construir la etapa de tests
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: ./frontend
           target: test
@@ -201,7 +201,7 @@ jobs:
 
       - name: Construir y publicar la imagen
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: ./frontend
           push: true
