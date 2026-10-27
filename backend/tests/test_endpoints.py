@@ -117,3 +117,25 @@ def test_ocupacion_de_sala_inexistente_o_ventana_invalida_falla(sala, horas, cod
         main.ocupacion_de_sala(3, ahora, ahora + timedelta(hours=horas), db)
 
     assert error.value.status_code == codigo
+
+
+def test_borrar_reserva_existente_la_elimina():
+    reserva = SimpleNamespace(id=7)
+    db = MagicMock()
+    db.get.return_value = reserva
+
+    main.borrar_reserva(7, db)
+
+    db.delete.assert_called_once_with(reserva)
+    db.commit.assert_called_once()
+
+
+def test_borrar_reserva_inexistente_devuelve_404_y_no_borra():
+    db = MagicMock()
+    db.get.return_value = None
+
+    with pytest.raises(HTTPException) as error:
+        main.borrar_reserva(7, db)
+
+    assert error.value.status_code == 404
+    db.delete.assert_not_called()

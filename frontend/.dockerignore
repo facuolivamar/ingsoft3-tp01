@@ -9,3 +9,7 @@ dist/
 .vscode/
 .idea/
 coverage/
+
+# reportes de Playwright
+playwright-report*/
+test-results/

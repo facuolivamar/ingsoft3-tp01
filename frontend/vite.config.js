@@ -17,6 +17,9 @@ export default defineConfig({
     },
   },
   test: {
+    // Solo los unit tests: las suites de Playwright (e2e/*.spec.js) corren
+    // aparte, contra QA desplegado (TP7).
+    include: ['src/**/*.test.js'],
     coverage: {
       provider: 'v8',
       // Que ENTRA en la cuenta: solo la logica sin DOM (format.js y api.js).

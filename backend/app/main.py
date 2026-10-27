@@ -129,3 +129,16 @@ def cancelar_reserva(reserva_id: int, db: Session = Depends(get_db)):
     db.commit()
     db.refresh(reserva)
     return reserva
+
+
+@app.delete("/api/reservas/{reserva_id}", status_code=204)
+def borrar_reserva(reserva_id: int, db: Session = Depends(get_db)):
+    """Borra una reserva. Cancelar deja el historial; borrar la saca del todo.
+
+    Lo usan las suites de integracion y e2e para limpiar lo que crean en QA.
+    """
+    reserva = db.get(Reserva, reserva_id)
+    if reserva is None:
+        raise HTTPException(status_code=404, detail="La reserva no existe.")
+    db.delete(reserva)
+    db.commit()
