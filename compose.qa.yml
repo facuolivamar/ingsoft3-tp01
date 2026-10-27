@@ -32,6 +32,11 @@ services:
       POSTGRES_USER: salas
       POSTGRES_PASSWORD: ${DB_PASSWORD}
       POSTGRES_DB: salas_qa
+      # Sentry (TP9). El DSN no es un secreto: identifica el proyecto,
+      # no da acceso a leer nada.
+      SENTRY_DSN: https://179a430adeee60c509ba8187ccdea34e@o4512325542150144.ingest.us.sentry.io/4512325556633600
+      SENTRY_ENVIRONMENT: qa
+      SENTRY_RELEASE: ${TAG}
     ports:
       - "8001:8000"
     depends_on:
