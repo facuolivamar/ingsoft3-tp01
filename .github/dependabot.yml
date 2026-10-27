@@ -1,0 +1,27 @@
+# Dependabot: vigila las dependencias de los tres ecosistemas de la app y
+# abre un PR por actualizacion. El PR pasa por el mismo pipeline que cualquier
+# cambio: tests, umbral de cobertura y checks obligatorios.
+version: 2
+updates:
+  - package-ecosystem: pip
+    directory: /backend
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+  - package-ecosystem: npm
+    directory: /frontend
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+  - package-ecosystem: docker
+    directory: /backend
+    schedule:
+      interval: weekly
+  - package-ecosystem: docker
+    directory: /frontend
+    schedule:
+      interval: weekly
