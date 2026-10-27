@@ -2,6 +2,7 @@
 # y los endpoints que la orquestan (main.py). Quedan afuera:
 #   - config.py y db.py: arranque y cableado (leer variables, crear el engine).
 #     No toman decisiones; un test ahi solo verificaria que SQLAlchemy existe.
+#   - observabilidad.py: arranque de Sentry, solo lee variables.
 #   - models.py y schemas.py: declaraciones de datos (columnas, campos). No
 #     tienen ramas propias que se puedan equivocar.
 [run]
@@ -12,6 +13,7 @@ omit =
     app/db.py
     app/models.py
     app/schemas.py
+    app/observabilidad.py
 
 [report]
 show_missing = True

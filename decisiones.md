@@ -785,3 +785,325 @@ workflow; la secuencia de los dos PRs; los borradores de esta sección.
 umbral frena **de verdad** con la corrida roja del PR #16 (27 tests en verde, job en rojo); y revisé
 cada test contra la tabla de la sección 1: qué assert lo pone en rojo si se invierte la regla. Lo que
 la suite **no** cubre está dicho en las secciones 6 y 7.
+
+---
+
+## TP6 — CD: environments, aprobaciones y deployment patterns
+
+### Enlaces de este TP
+
+| Lo que prueba | Enlace |
+|---|---|
+| Paquete del backend (público, etiquetas `sha-<commit>`) | https://github.com/users/facuolivamar/packages/container/package/salas-backend · espejo: https://hub.docker.com/r/facuolivam/salas-backend/tags |
+| Paquete del frontend | https://github.com/users/facuolivamar/packages/container/package/salas-frontend · espejo: https://hub.docker.com/r/facuolivam/salas-frontend/tags |
+| Cadena (1): job de un **PR** con los tests en verde y «Entrar al registry» **salteado** | https://github.com/facuolivamar/ingsoft3-tp01/actions/runs/40430415676/job/121946435557 |
+| Cadena (2): job de **`main`** donde «Construir y publicar la imagen» es el **último** paso, después de los tests | https://github.com/facuolivamar/ingsoft3-tp01/actions/runs/40428688559/job/121940783542 |
+| Flujo completo: QA verde → *Waiting for review* → aprobación → PROD con smoke verde | https://github.com/facuolivamar/ingsoft3-tp01/actions/runs/40428688559 |
+| **Rechazo** con motivo | https://github.com/facuolivamar/ingsoft3-tp01/actions/runs/40430500012 |
+| URLs (plan C, en la notebook) | QA: http://localhost:8081 (api http://localhost:8001) · PROD: http://localhost:8082 (api http://localhost:8002) |
+
+`docker pull ghcr.io/facuolivamar/salas-backend:sha-3de35b3e70e5403e94f2ffb83b332b998a3650b4` funciona
+sin credenciales desde cualquier máquina (y su espejo `docker.io/facuolivam/salas-backend:sha-…`).
+
+### 1. Por qué el plan C, y qué pierde
+
+Usé el **fallback local (§3.6)**: mi notebook registrada como *self-hosted runner* (`notebook-facu`) y
+dos proyectos de Compose, `compose.qa.yml` (`name: salas-qa`, puertos 8081/8001, volumen
+`datos_db_qa`, base `salas_qa`) y `compose.prod.yml` (`name: salas-prod`, 8082/8002, `datos_db_prod`,
+`salas_prod`). **El deploy lo hace siempre el pipeline**: nunca corro `docker compose up` a mano.
+
+Pierdo respecto de la nube: URLs públicas (QA y PROD existen sólo mientras la notebook está prendida
+y el runner corriendo: `C:\actions-runner\run.cmd`), un entorno ajeno a mi máquina, y el cold start
+real de un free tier. Lo elegí por tiempo y porque no dependía de cuentas externas.
+
+### 2. El artefacto se publica sólo con la verificación en verde
+
+Tres eslabones, encadenados, lo hacen imposible por accidente:
+1. **Nada entra a `main` sin verde**: los dos jobs de build son *required checks* (TP4/TP5).
+2. **Sólo `main` publica**: los pasos «Entrar al registry» y «Construir y publicar la imagen» tienen
+   `if: github.event_name == 'push' && github.ref == 'refs/heads/main'`. En un PR salen salteados
+   (enlace de la cadena 1).
+3. **Publicar es el último paso del job que testea**: si los tests o el umbral fallan, el job se
+   corta antes (enlace de la cadena 2).
+
+Si se publicara igual, el registry dejaría de significar «esto pasó la verificación»: una etiqueta
+`sha-…` podría ser código roto, y nadie podría desplegar desde ahí sin volver a verificar.
+
+La etiqueta es **`sha-<commit>`**: dice exactamente de qué código salió. No publico `latest`: es una
+etiqueta que se mueve, y con ella «qué corre en PROD» deja de tener una respuesta.
+
+### 3. Continuous Delivery, no Deployment
+
+Implementé **Continuous Delivery**: QA se actualiza solo con cada merge, PROD **sólo** con
+aprobación humana. Para Continuous Deployment me faltarían pruebas que me den confianza suficiente
+para sacar al humano (las e2e del TP7 son un paso) y, sobre todo, observabilidad en PROD para
+detectar y revertir solo (TP9). Con una app de reservas usada por una oficina, un deploy
+automático roto un lunes a las 9 cuesta más que el minuto de aprobar.
+
+### 4. El diseño de la cadena y el alcance de cada secret
+
+`backend` + `frontend` (build, tests, umbral, publicar) → `deploy-qa` (`needs` de los dos,
+`environment: qa`) → *(TP7: `integracion` → `e2e`)* → `deploy-prod` (`environment: production`).
+
+- `DB_PASSWORD` es un **environment secret**, distinto en cada environment: el de `qa` sólo lo ve
+  un job con `environment: qa`, y el de `production` sólo `deploy-prod`, **después** de la
+  aprobación. Si estuviera en el repo, cualquier job —incluido el de un PR— podría leer la clave de
+  PROD.
+- `DOCKERHUB_TOKEN` es un secret de repo, porque lo usan los jobs de build en `main`.
+- `production` tiene **required reviewer** (yo, con *Prevent self-review* apagado).
+
+### 5. Qué miro antes de aprobar
+
+1. Que el commit que espera sea **el último de `main`** (si no, promuevo algo viejo: fue el motivo
+   del rechazo).
+2. Smoke de QA en verde y, desde el TP7, integración y e2e en verde **de esa misma corrida**.
+3. Que la etiqueta del deploy (`TAG: sha-…` en el log) sea la de ese commit.
+4. Que no haya un PR de cambio de esquema de base sin plan de vuelta atrás.
+
+### 6. El rechazo
+
+Corrida https://github.com/facuolivamar/ingsoft3-tp01/actions/runs/40430500012 (commit `9fbe5e5`, el
+arreglo del botón): todo en verde, pero detrás ya habían entrado Dependabot (#25) y el TP8 (#26) en
+`5e9258c`. Aprobarla dejaba PROD en un commit que ya era viejo y me obligaba a promover dos veces;
+la rechacé con ese motivo y promoví `5e9258c`.
+
+### 7. El smoke test: qué prueba y qué no
+
+`scripts/smoke.sh` pregunta, con hasta 20 reintentos cada 5 s: `/api/health` (el proceso vive),
+`/api/salas` (la api llega a **su** base), `/` del front y `/api/salas` **a través del nginx del
+front** (el front habla con su api). Reintenta porque `docker compose up` vuelve apenas arranca
+los contenedores, no cuando Postgres y uvicorn están listos. Si después de todo no contesta, sale
+con 1 y el job queda rojo.
+
+**Qué no prueba:** qué versión corre (contesta igual una imagen vieja), ni que las reglas
+funcionen. Eso es de los tests y de las e2e.
+
+### 8. La misma imagen del front en QA y en PROD
+
+La dirección del backend **no está en la imagen**: `nginx.conf` es un *template*
+(`/etc/nginx/templates/default.conf.template`) con `proxy_pass ${BACKEND_URL}/api/;`, y la imagen
+oficial de nginx lo procesa con `envsubst` al arrancar. Cada compose le pasa su `BACKEND_URL`.
+Adentro de la imagen quedan los estáticos compilados y la configuración de nginx; por variable,
+la dirección del backend (y en el backend, toda la conexión a la base).
+
+### 9. La letra chica (plan C) y la garantía que perdería Render
+
+No hay free tier: el límite es la notebook (prendida y con el runner corriendo). Los minutos de
+Actions de los jobs `self-hosted` no se cuentan.
+
+En el riel de Render, el proveedor **reconstruye** desde el repo: lo que corre sería otra
+construcción del mismo código, no la imagen que pasó los tests. En mi plan C eso no pasa: los
+entornos hacen `pull` de la etiqueta `sha-<commit>` del registry (ver TP7, §1).
+
+### 10. Deployment pattern y rollback
+
+**Para producción real elegiría blue-green.** La app es una sola instancia con una base: un canary
+pide repartir tráfico por porcentaje (un balanceador) y métricas por versión que hoy no tengo.
+Blue-green es más barato de razonar: levanto la versión nueva al lado, la verifico con el mismo
+smoke y las e2e, y cambio el tráfico de golpe; el rollback es volver a apuntar a la vieja, en
+segundos. Su costo: dos entornos a la vez y que las migraciones de base sean compatibles hacia
+atrás. Me falta observabilidad (errores y latencia por versión) para saber cuándo volver.
+
+**Mi rollback actual**, paso a paso: (1) en *Deployments* veo el commit anterior que estuvo en
+`production`; (2) en esa corrida, *Re-run* del job `Deploy a PROD`; (3) apruebo; (4) el job hace
+`pull` de la imagen `sha-<anterior>` —ya está en el registry, no se reconstruye nada— y el smoke
+verifica.
+
+**Rollback medido** (lo hice de verdad el 26/10, sobre PROD): con `5e9258c` en PROD, decidí volver a
+`3de35b3` a las **01:18:49 UTC**; *Re-run* del job + aprobación; el job arrancó 01:19:06 y terminó
+01:19:47 con el smoke en verde, y `docker inspect salas-prod-backend-1` mostraba
+`sha-3de35b3…`. **60 segundos** de la decisión al smoke verde (41 s de job). El rastro es el
+intento 2 del job: https://github.com/facuolivamar/ingsoft3-tp01/actions/runs/40428688559/job/121951119425
+— y *Deployments* muestra los dos deploys a `production`. Después volví PROD a `5e9258c` igual
+(re-run del deploy de la corrida 40430750509). Es la métrica DORA **tiempo de restauración**:
+rápido porque la imagen vieja ya está en el registry y no se reconstruye nada.
+
+### 11. Problemas y cómo los resolví
+
+- **`permission_denied: write_package`**: los paquetes `salas-*` existían desde el TP2, subidos a
+  mano con un PAT, y no estaban vinculados al repo. Les di acceso de escritura al repo en *Manage
+  Actions access* de cada paquete.
+- **El shell del runner Windows**: un `shell:` con la ruta de Git Bash entre comillas no se parsea.
+  Lo resolví con la ruta corta sin espacios (`C:/PROGRA~1/Git/bin/bash.exe`).
+- **CRLF**: Git en Windows convertía `smoke.sh` a CRLF y bash lo rompía. `.gitattributes` con
+  `*.sh text eol=lf`.
+- **El Docker Desktop de la notebook no puede hacer `pull` de ghcr.io** (cualquier imagen, incluso
+  públicas ajenas, da `denied`, mientras que desde un contenedor ghcr.io responde normal). Probé
+  pasar la imagen como artefacto (`docker save`/`load`), pero 250 MB tardaban más de 15 minutos en
+  bajar. Lo resolví publicando **el mismo build** con dos etiquetas: `ghcr.io/…` y
+  `docker.io/facuolivam/…`. Es un solo build, así que es el mismo digest; los entornos bajan de
+  Docker Hub.
+
+### 12. Declaración de uso de IA
+
+Usé **Claude (Claude Code)**. Decidí yo: plan C, Delivery y no Deployment, los criterios del gate,
+el motivo del rechazo y blue-green. Delegué: los compose, el workflow, el smoke, el registro del
+runner y los environments por API, y los borradores de esta sección. Lo verifiqué con las corridas
+de arriba: el PR que no publica, el `main` que publica al final, la pausa de revisión, el rechazo, y
+el smoke contra los dos entornos.
+
+---
+
+## TP7 — Contenedores en el pipeline + integración y e2e
+
+### Enlaces del TP7
+
+| Lo que prueba | Enlace |
+|---|---|
+| Paquetes con sus etiquetas `sha-…` | los de la tabla del TP6 |
+| El **commit que rompió la app** (texto del botón, código de la app, no de `e2e/`) | https://github.com/facuolivamar/ingsoft3-tp01/pull/24 |
+| La corrida con **integración VERDE y e2e ROJA**, `Deploy a PROD` sin arrancar | https://github.com/facuolivamar/ingsoft3-tp01/actions/runs/40429673414 |
+| Su reporte de integración (verde) | https://github.com/facuolivamar/ingsoft3-tp01/actions/runs/40429673414/artifacts/12701217545 |
+| Su reporte e2e (rojo, con screenshot y traza) | https://github.com/facuolivamar/ingsoft3-tp01/actions/runs/40429673414/artifacts/12701154770 |
+| El arreglo | https://github.com/facuolivamar/ingsoft3-tp01/pull/27 |
+| La **corrida completa en verde** posterior, hasta PROD | https://github.com/facuolivamar/ingsoft3-tp01/actions/runs/40430750509 |
+| URLs de QA y PROD | las del TP6 (plan C) |
+
+### 1. Build once, deploy many: los entornos ejecutan LA imagen
+
+`compose.qa.yml` y `compose.prod.yml` usan `image: docker.io/facuolivam/salas-*:${TAG}` —no
+`build:`—, y el pipeline les pasa `TAG: sha-${{ github.sha }}`. El log de cada deploy muestra el
+`pull` de esa etiqueta y su `RepoDigest`; `deploy-prod` usa la **misma** `TAG` que QA, así que PROD
+recibe la imagen que QA verificó, no otra construcción. Problema que resuelve: en el TP6 en la nube,
+QA y PROD serían dos reconstrucciones del mismo commit, y las e2e de QA no dirían nada sobre lo que
+corre en PROD (una dependencia que se resolvió distinto, una capa base que cambió entre builds).
+
+**Etiquetas:** `sha-<commit>` en el registry garantiza **identidad** (este binario salió de este
+código); `v7.0.0` en git le pone **nombre** al commit que está en PROD. Del tag a la imagen, en un
+paso: `git rev-list -n1 v7.0.0` da el commit, y `sha-<ese commit>` es la imagen.
+
+**Por qué Docker Hub y no ghcr.io para el pull:** el Docker Desktop de la notebook no puede leer
+ghcr.io (TP6 §11). El mismo build se publica en los dos con las dos etiquetas.
+
+**Cómo se comprueba desde afuera:** en el log del deploy, `Desplegando sha-…` + el `RepoDigest`
+impreso, que coincide con el digest del package de esa etiqueta; y `docker inspect` de los
+contenedores muestra esa imagen. El smoke sólo dice que **contesta**, no **qué** contesta.
+
+### 2. Las dos suites
+
+**Integración** (`frontend/e2e/api.spec.js`, fixture `request`, sin navegador, contra la api de QA
+`http://localhost:8001`):
+1. alta → `GET` filtrado por sala la encuentra → `DELETE` → `GET` ya no la encuentra;
+2. título vacío → **422** (FastAPI contesta 422, no 400, cuando el cuerpo no cumple el schema) y la
+   cantidad de reservas de la sala no cambió;
+3. **la que elegí:** dos reservas solapadas en la misma sala → la segunda **409** con «ya está
+   reservada». Es la regla 5 contra la base real: el unit test con mock no puede probar que la
+   consulta de confirmadas trae lo que hay en Postgres. Si se rompe, me escribe el que encontró a
+   otro equipo en su sala.
+
+**E2E** (`frontend/e2e/app.spec.js`, Chromium contra el front de QA `http://localhost:8081`):
+1. **creación:** llenar el formulario → *Reservar* → «Reserva confirmada.» y la fila con su título →
+   *Cancelar* → «cancelada» → se borra → al recargar ya no está;
+2. **error:** turno ocupado → el usuario ve «ya esta reservada» y su reserva no aparece;
+3. **la de todos los días:** reservo, recargo, y mi reserva sigue ahí; y aparece al filtrar por su
+   sala. Si mañana no anda, me escribe toda la oficina.
+
+Cada test fabrica un título con la hora y un turno en un día hábil futuro al azar (QA es uno solo y
+lo comparten todas las corridas), y **borra lo que creó, comprobándolo** (`DELETE` → 204). Para eso
+agregué `DELETE /api/reservas/{id}` al backend, con sus unit tests.
+
+**Qué NO puse:** en integración, nada de UI; en e2e, nada que ya cubra un unit test (cada borde de
+duración, cada mensaje de validación): la e2e es cara y lenta, va en la punta de la pirámide.
+
+### 3. El par verde/rojo que diagnosticó la rotura
+
+En la corrida 40429673414 cambié el texto del botón a «Confirmar reserva». **Integración verde, e2e
+roja**: la api y la base andaban perfecto; lo roto estaba **entre el usuario y la api** —la UI—. Si
+hubiera sido al revés (integración roja), el problema estaría en la api o en la base, y la e2e
+fallaría como consecuencia. Los unit tests del front no lo vieron porque no miran el botón.
+
+### 4. La integración es la amplia
+
+Corre contra la api **ya desplegada** en QA, con su Postgres de verdad: prueba la imagen, la red de
+Compose, el driver y el esquema reales. Pierde velocidad y aislamiento (depende de QA vivo y
+compartido) y no puede simular fallas raras de la base. La estrecha (api levantada en el job con una
+base efímera) sería más rápida pero no probaría lo que se despliega.
+
+### 5. Timeouts y flaky
+
+`timeout: 30_000` por test, `expect` de 10 s, y **un** reintento (`retries: 1`) que absorbe un
+tropiezo de red; un test que falla dos veces seguidas es un bug, no mala suerte. Un test **flaky** es
+el que con el mismo código a veces pasa y a veces no (datos compartidos, carreras, tiempos): por eso
+datos únicos por corrida y `workers: 1` contra un QA compartido. Nada de `test.skip`.
+
+### 6. Problemas y cómo los resolví
+
+- `getByLabel('Sala')` encontraba dos selects; usé `.first()` para el del formulario.
+- Vitest tomaba los `*.spec.js` de Playwright como unit tests: `test.include: ['src/**/*.test.js']`.
+- El pull desde ghcr.io (TP6 §11).
+
+### 7. Declaración de uso de IA
+
+Usé **Claude (Claude Code)** para escribir las suites, el `DELETE`, los jobs y estos borradores.
+Elegí yo qué tercera prueba va en cada suite y qué romper. Lo verifiqué con la corrida roja (el
+fallo es por el botón, no por el test: el diff del PR #24 sólo toca `App.jsx`) y con la verde
+posterior hasta PROD.
+
+## TP8 — Infraestructura como Código
+
+### 1. Riel y versiones
+
+- **Plan C: Terraform + provider Docker, 100 % local.** QA y PROD ya corren en esta notebook con
+  `compose.qa.yml` / `compose.prod.yml` sobre el self-hosted runner (TP6/TP7), no tengo cuentas de
+  nube, y el Docker Desktop de esta máquina no puede bajar de `ghcr.io` — por eso las imágenes del
+  TP7 se leen de Docker Hub (`docker.io/facuolivam/salas-*`).
+- **Versiones fijadas:** Terraform `required_version = ">= 1.5"` (uso 1.9.8) y
+  `kreuzwerker/docker` `~> 3.0`; el `.terraform.lock.hcl` versionado fija la exacta (**3.9.0**).
+- **Qué declara `infra/`:** un entorno nuevo, `preprod`, con 8 recursos — red
+  `salas-preprod-net`, volumen `salas-preprod-db-data`, las tres imágenes y los contenedores
+  `salas-preprod-db` (postgres:16-alpine), `salas-preprod-api` (host 8003) y `salas-preprod-web`
+  (host 8083). Los puertos no chocan con QA (8001/8081) ni PROD (8002/8082), y los nombres tampoco.
+
+### 2. Qué es variable y qué se deriva
+
+- **Variables:** `api_tag` (sin default: el `sha-<commit>` que publicó el pipeline) y `db_password`
+  (`sensitive`, sin default). La contraseña la paso con `TF_VAR_db_password` en la terminal; nunca
+  está en el HCL.
+- **Derivado:** el `POSTGRES_HOST` de la api es `docker_container.db.name`, y el `BACKEND_URL` del
+  front es `http://${docker_container.api.name}:${docker_container.api.ports[0].internal}`. Si
+  renombro un contenedor, la referencia se actualiza sola, y además esas referencias le dan a
+  Terraform el orden: red/volumen/imágenes → db → api → web al crear, y al revés al destruir.
+- **El estado vive fuera del repo y del workspace**: `backend "local"` con
+  `-backend-config="path=$HOME/tfstate/salas-preprod.tfstate"`. El `infra/.gitignore` (creado antes
+  del primer apply) cubre `*.tfstate*`, `.terraform/`, `*.tfvars` y los planes guardados.
+
+### 3. Lo que probé
+
+- **Nace:** `init` → `plan` (8 to add) → `apply`. Respondieron `GET /api/health`, `GET /api/salas`
+  (toca la base: devuelve las salas sembradas), el front en `:8083/` y `:8083/api/salas` (el nginx
+  de preprod hablando con *su* api, no con la de QA).
+- **Idempotencia:** el segundo `plan` dijo «No changes».
+- **Drift:** `docker rm -f salas-preprod-api` → el `plan` lo vio (`docker_container.api will be
+  created`, 1 to add) → `apply` lo recreó, las URLs volvieron a responder y el `plan` siguiente dio
+  «No changes».
+- **Ciclo de vida:** `destroy` (8 destroyed; quedaron sólo los contenedores, volúmenes y redes de
+  `salas-qa` y `salas-prod`) → `apply` (8 added) → las cuatro URLs respondieron de nuevo → `destroy`
+  otra vez. **Preprod queda destruido**: tiene que poder nacer, no estar vivo.
+- **El estado por dentro:** la contraseña está en claro en el `.tfstate` (dentro del `env` de los
+  contenedores). `sensitive` sólo la oculta en la salida del plan; por eso el estado no va al repo.
+
+### 4. Problemas y cómo los resolví
+
+- **«Arrancó ≠ está listo» otra vez:** `depends_on` espera que se *cree* el contenedor de la base,
+  no que postgres acepte conexiones. En el primer apply la api se cayó una vez y Docker la levantó
+  sola gracias a `restart = "unless-stopped"` (RestartCount 1). El provider no tiene el
+  `service_healthy` de Compose; por eso los curls van con reintentos.
+- **El `destroy` y las imágenes compartidas:** `postgres:16-alpine` también la usan QA y PROD. Puse
+  `keep_locally = true` en los `docker_image` para que el destroy no intente borrarlas del Docker
+  local.
+- **El host del provider en Windows:** el daemon de Docker Desktop está en
+  `npipe:////./pipe/dockerDesktopLinuxEngine`; quedó como default de la variable `docker_host`.
+- **Riesgo conocido, no resuelto:** nginx resuelve `salas-preprod-api` al arrancar. Si la api se
+  recrea sola (drift) y toma otra IP, el front seguiría apuntando a la vieja hasta reiniciarlo. En
+  mi prueba de drift siguió respondiendo, pero no lo forcé.
+- **Lo que sigue siendo artesanal:** QA y PROD siguen siendo Compose; preprod es el único entorno
+  declarado con Terraform. Y el estado es un archivo de una sola máquina: si hubiera una segunda,
+  haría falta un backend compartido.
+
+### 5. Declaración de uso de IA
+
+Usé **Claude (Claude Code)** con acceso a la terminal, a Docker y a `gh`. **Escribió el HCL** de
+`infra/` y **corrió el ciclo** completo (init, plan, apply, idempotencia, drift, destroy/apply) y los
+curls de verificación. **Yo** elegí el riel y los puertos, y revisé que nada tocara `salas-qa` ni
+`salas-prod`. Para la defensa tengo que poder leer el plan en voz alta, explicar de dónde sale cada
+dirección derivada y por qué el destroy va web → api → db; si no puedo explicarlo, no lo entrego.

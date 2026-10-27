@@ -7,9 +7,12 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app import rules
+from app.observabilidad import iniciar_sentry
 from app.db import Base, engine, get_db
 from app.models import ESTADO_CANCELADA, ESTADO_CONFIRMADA, Reserva, Sala
 from app.schemas import ReservaCrear, ReservaOut, SalaOut
+
+iniciar_sentry()
 
 app = FastAPI(title="Salas", version="1.0.0")
 
@@ -50,6 +53,13 @@ def health():
     """Sonda de salud: la usan el healthcheck del contenedor, el smoke test del
     pipeline y el monitor externo (que pregunta con HEAD)."""
     return {"status": "ok"}
+
+
+@app.get("/api/debug-sentry")
+def debug_sentry():
+    """Error provocado a proposito (TP9): prueba que Sentry lo recibe. Se saca
+    despues de verlo llegar."""
+    raise RuntimeError("Error de prueba para Sentry (TP9)")
 
 
 @app.get("/api/salas", response_model=list[SalaOut])
