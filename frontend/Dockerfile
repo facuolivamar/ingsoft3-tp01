@@ -1,7 +1,7 @@
 # ---- Etapa 1: build (compila la SPA) ----
 # Node y las 117 dependencias de desarrollo solo hacen falta para producir los
 # estaticos. Nada de eso tiene que viajar a produccion.
-FROM node:22-alpine AS build
+FROM node:26-alpine AS build
 
 WORKDIR /build
 
