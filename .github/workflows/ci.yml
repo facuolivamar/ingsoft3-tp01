@@ -271,7 +271,19 @@ jobs:
       - name: Dependencias
         run: npm ci
       - name: Suite de integracion (Playwright request, sin navegador)
-        run: npx playwright test --project=integracion
+        # tee guarda la salida para el resumen; con pipefail el codigo de
+        # salida sigue siendo el de Playwright (si falla, el job falla).
+        run: npx playwright test --project=integracion 2>&1 | tee resultado-integracion.txt
+
+      - name: Resultado en el resumen de la corrida
+        if: ${{ !cancelled() }}
+        run: |
+          {
+            echo "## Integracion contra la api de QA"
+            echo '```'
+            grep -E "^ +[0-9]+ (passed|failed|flaky|skipped|did not run)" resultado-integracion.txt || echo "sin resultado"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
       - name: Publicar el reporte
         if: ${{ !cancelled() }}
         uses: actions/upload-artifact@v4
@@ -299,7 +311,19 @@ jobs:
           npm ci
           npx playwright install chromium
       - name: Suite e2e (navegador contra QA)
-        run: npx playwright test --project=e2e
+        # tee guarda la salida para el resumen; con pipefail el codigo de
+        # salida sigue siendo el de Playwright (si falla, el job falla).
+        run: npx playwright test --project=e2e 2>&1 | tee resultado-e2e.txt
+
+      - name: Resultado en el resumen de la corrida
+        if: ${{ !cancelled() }}
+        run: |
+          {
+            echo "## E2E contra QA"
+            echo '```'
+            grep -E "^ +[0-9]+ (passed|failed|flaky|skipped|did not run)" resultado-e2e.txt || echo "sin resultado"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
       - name: Publicar el reporte (con traza y screenshot si falla)
         if: ${{ !cancelled() }}
         uses: actions/upload-artifact@v4

@@ -4,6 +4,40 @@ Las decisiones técnicas de cada práctico, por qué se tomaron, qué problemas 
 camino y cómo se resolvieron. Se acumula: cada TP agrega su sección abajo, no reemplaza a la
 anterior.
 
+## Enlaces de los TPs 6 y 7
+
+Lo que no se encuentra navegando el repo: los paquetes, las URLs y las corridas que prueban cada decisión. El detalle de cada TP está en su sección.
+
+### Enlaces del TP6
+
+| Lo que prueba | Enlace |
+|---|---|
+| Paquete del backend (público, etiquetas `sha-<commit>`) | https://github.com/users/facuolivamar/packages/container/package/salas-backend · espejo: https://hub.docker.com/r/facuolivam/salas-backend/tags |
+| Paquete del frontend | https://github.com/users/facuolivamar/packages/container/package/salas-frontend · espejo: https://hub.docker.com/r/facuolivam/salas-frontend/tags |
+| Cadena (1): job de un **PR** con los tests en verde y «Entrar al registry» **salteado** | https://github.com/facuolivamar/ingsoft3-tp01/actions/runs/40430415676/job/121946435557 |
+| Cadena (2): job de **`main`** donde «Construir y publicar la imagen» es el **último** paso, después de los tests | https://github.com/facuolivamar/ingsoft3-tp01/actions/runs/40428688559/job/121940783542 |
+| Flujo completo: QA verde → *Waiting for review* → aprobación → PROD con smoke verde | https://github.com/facuolivamar/ingsoft3-tp01/actions/runs/40428688559 |
+| **Rechazo** con motivo | https://github.com/facuolivamar/ingsoft3-tp01/actions/runs/40430500012 |
+| URLs (plan C, en la notebook) | QA: http://localhost:8081 (api http://localhost:8001) · PROD: http://localhost:8082 (api http://localhost:8002) |
+
+`docker pull ghcr.io/facuolivamar/salas-backend:sha-3de35b3e70e5403e94f2ffb83b332b998a3650b4` funciona
+sin credenciales desde cualquier máquina (y su espejo `docker.io/facuolivam/salas-backend:sha-…`).
+
+### Enlaces del TP7
+
+| Lo que prueba | Enlace |
+|---|---|
+| Paquetes con sus etiquetas `sha-…` | los de la tabla del TP6 |
+| El **commit que rompió la app** (texto del botón, código de la app, no de `e2e/`) | https://github.com/facuolivamar/ingsoft3-tp01/pull/24 |
+| La corrida con **integración VERDE y e2e ROJA**, `Deploy a PROD` sin arrancar | https://github.com/facuolivamar/ingsoft3-tp01/actions/runs/40429673414 |
+| Su reporte de integración (verde) | https://github.com/facuolivamar/ingsoft3-tp01/actions/runs/40429673414/artifacts/12701217545 |
+| Su reporte e2e (rojo, con screenshot y traza) | https://github.com/facuolivamar/ingsoft3-tp01/actions/runs/40429673414/artifacts/12701154770 |
+| El arreglo | https://github.com/facuolivamar/ingsoft3-tp01/pull/27 |
+| La **corrida completa en verde** posterior, hasta PROD | https://github.com/facuolivamar/ingsoft3-tp01/actions/runs/40430750509 |
+| URLs de QA y PROD | las del TP6 (plan C) |
+
+---
+
 ---
 
 ## TP1 — Git colaborativo
@@ -790,20 +824,7 @@ la suite **no** cubre está dicho en las secciones 6 y 7.
 
 ## TP6 — CD: environments, aprobaciones y deployment patterns
 
-### Enlaces de este TP
-
-| Lo que prueba | Enlace |
-|---|---|
-| Paquete del backend (público, etiquetas `sha-<commit>`) | https://github.com/users/facuolivamar/packages/container/package/salas-backend · espejo: https://hub.docker.com/r/facuolivam/salas-backend/tags |
-| Paquete del frontend | https://github.com/users/facuolivamar/packages/container/package/salas-frontend · espejo: https://hub.docker.com/r/facuolivam/salas-frontend/tags |
-| Cadena (1): job de un **PR** con los tests en verde y «Entrar al registry» **salteado** | https://github.com/facuolivamar/ingsoft3-tp01/actions/runs/40430415676/job/121946435557 |
-| Cadena (2): job de **`main`** donde «Construir y publicar la imagen» es el **último** paso, después de los tests | https://github.com/facuolivamar/ingsoft3-tp01/actions/runs/40428688559/job/121940783542 |
-| Flujo completo: QA verde → *Waiting for review* → aprobación → PROD con smoke verde | https://github.com/facuolivamar/ingsoft3-tp01/actions/runs/40428688559 |
-| **Rechazo** con motivo | https://github.com/facuolivamar/ingsoft3-tp01/actions/runs/40430500012 |
-| URLs (plan C, en la notebook) | QA: http://localhost:8081 (api http://localhost:8001) · PROD: http://localhost:8082 (api http://localhost:8002) |
-
-`docker pull ghcr.io/facuolivamar/salas-backend:sha-3de35b3e70e5403e94f2ffb83b332b998a3650b4` funciona
-sin credenciales desde cualquier máquina (y su espejo `docker.io/facuolivam/salas-backend:sha-…`).
+Los enlaces de este TP están [arriba de todo](#enlaces-de-los-tps-6-y-7).
 
 ### 1. Por qué el plan C, y qué pierde
 
@@ -946,18 +967,7 @@ el smoke contra los dos entornos.
 
 ## TP7 — Contenedores en el pipeline + integración y e2e
 
-### Enlaces del TP7
-
-| Lo que prueba | Enlace |
-|---|---|
-| Paquetes con sus etiquetas `sha-…` | los de la tabla del TP6 |
-| El **commit que rompió la app** (texto del botón, código de la app, no de `e2e/`) | https://github.com/facuolivamar/ingsoft3-tp01/pull/24 |
-| La corrida con **integración VERDE y e2e ROJA**, `Deploy a PROD` sin arrancar | https://github.com/facuolivamar/ingsoft3-tp01/actions/runs/40429673414 |
-| Su reporte de integración (verde) | https://github.com/facuolivamar/ingsoft3-tp01/actions/runs/40429673414/artifacts/12701217545 |
-| Su reporte e2e (rojo, con screenshot y traza) | https://github.com/facuolivamar/ingsoft3-tp01/actions/runs/40429673414/artifacts/12701154770 |
-| El arreglo | https://github.com/facuolivamar/ingsoft3-tp01/pull/27 |
-| La **corrida completa en verde** posterior, hasta PROD | https://github.com/facuolivamar/ingsoft3-tp01/actions/runs/40430750509 |
-| URLs de QA y PROD | las del TP6 (plan C) |
+Los enlaces de este TP están [arriba de todo](#enlaces-de-los-tps-6-y-7).
 
 ### 1. Build once, deploy many: los entornos ejecutan LA imagen
 
@@ -984,8 +994,9 @@ contenedores muestra esa imagen. El smoke sólo dice que **contesta**, no **qué
 **Integración** (`frontend/e2e/api.spec.js`, fixture `request`, sin navegador, contra la api de QA
 `http://localhost:8001`):
 1. alta → `GET` filtrado por sala la encuentra → `DELETE` → `GET` ya no la encuentra;
-2. título vacío → **422** (FastAPI contesta 422, no 400, cuando el cuerpo no cumple el schema) y la
-   cantidad de reservas de la sala no cambió;
+2. título vacío → **400** y la cantidad de reservas de la sala no cambió. FastAPI contesta 422 por
+   defecto; agregué un `exception_handler` que lo convierte en 400 (pedido mal formado), y dejo el
+   409 para «bien formado, pero choca con una regla»;
 3. **la que elegí:** dos reservas solapadas en la misma sala → la segunda **409** con «ya está
    reservada». Es la regla 5 contra la base real: el unit test con mock no puede probar que la
    consulta de confirmadas trae lo que hay en Postgres. Si se rompe, me escribe el que encontró a

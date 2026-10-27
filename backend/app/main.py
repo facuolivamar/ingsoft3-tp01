@@ -1,7 +1,9 @@
 """API de Salas: reserva de salas de reunion."""
 from datetime import datetime
 
-from fastapi import Depends, FastAPI, HTTPException
+from fastapi import Depends, FastAPI, HTTPException, Request
+from fastapi.exceptions import RequestValidationError
+from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -25,6 +27,16 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+@app.exception_handler(RequestValidationError)
+async def pedido_invalido(request: Request, error: RequestValidationError):
+    """Un pedido mal formado (titulo vacio, campo faltante) es un 400.
+
+    FastAPI contesta 422 por defecto; la API de Salas usa 400 para "el pedido
+    esta mal" y reserva 409 para "esta bien formado pero choca con una regla".
+    """
+    return JSONResponse(status_code=400, content={"detail": error.errors()})
+
 
 SALAS_INICIALES = [
     ("Auditorio", 40),
