@@ -36,8 +36,8 @@ test('un alta con titulo vacio se rechaza y no crea nada', async ({ request }) =
     data: { sala_id: sala.id, titulo: '', responsable: 'Pipeline', asistentes: 2, ...turnoFuturo() },
   })
 
-  // FastAPI contesta 422 (Unprocessable Entity) cuando el cuerpo no cumple el schema
-  expect(alta.status()).toBe(422)
+  // 400: el pedido esta mal formado (la api convierte el 422 de FastAPI en 400)
+  expect(alta.status()).toBe(400)
   expect((await titulosDeLaSala(request, sala.id)).length).toBe(antes)
 })
 

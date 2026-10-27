@@ -139,3 +139,16 @@ def test_borrar_reserva_inexistente_devuelve_404_y_no_borra():
 
     assert error.value.status_code == 404
     db.delete.assert_not_called()
+
+
+def test_un_pedido_que_no_cumple_el_schema_devuelve_400():
+    import asyncio
+
+    from fastapi.exceptions import RequestValidationError
+
+    error = RequestValidationError([{"loc": ("body", "titulo"), "msg": "muy corto"}])
+
+    respuesta = asyncio.run(main.pedido_invalido(MagicMock(), error))
+
+    assert respuesta.status_code == 400
+    assert b"titulo" in respuesta.body
