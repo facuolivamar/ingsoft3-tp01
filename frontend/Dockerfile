@@ -23,7 +23,7 @@ ENTRYPOINT ["npx", "vitest", "run", "--coverage", "--reporter=default", "--repor
 
 # ---- Etapa 3: runtime (nginx sirve los estaticos) ----
 # La imagen final no tiene Node: es un servidor web con archivos HTML, CSS y JS.
-FROM nginx:1.27-alpine AS runtime
+FROM nginx:1.31-alpine AS runtime
 
 # Va a templates/, no a conf.d/: el entrypoint de nginx lo procesa con
 # envsubst al arrancar el contenedor (ver nginx.conf).
