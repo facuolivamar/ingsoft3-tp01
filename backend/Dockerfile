@@ -1,7 +1,7 @@
 # ---- Etapa 1: build (compila las dependencias) ----
 # Necesita compilador y headers de PostgreSQL porque psycopg2 se construye
 # desde fuente. Nada de esto tiene que sobrevivir a la imagen final.
-FROM python:3.11-slim AS build
+FROM python:3.15-slim AS build
 
 WORKDIR /build
 
@@ -33,7 +33,7 @@ ENV COVERAGE_FILE=/out/.coverage
 ENTRYPOINT ["pytest", "--junitxml=/out/tests.xml", "--cov-report=xml:/out/coverage.xml", "--cov-report=html:/out/htmlcov"]
 
 # ---- Etapa 3: runtime (imagen final, sin compilador) ----
-FROM python:3.11-slim AS runtime
+FROM python:3.15-slim AS runtime
 
 # libpq5 es la biblioteca cliente que psycopg2 necesita para *correr*.
 # libpq-dev y gcc, que hicieron falta para *compilar*, se quedaron en la etapa 1.
